@@ -1,0 +1,153 @@
+# =============================================================================
+# Trading Platform Helm Chart - Default Values
+# =============================================================================
+
+# -- Number of replicas
+replicaCount: 3
+
+# -- Container image configuration
+image:
+  repository: ghcr.io/sruja/trading-platform
+  tag: latest
+  pullPolicy: Always
+
+# -- Image pull secrets (for private registries)
+imagePullSecrets: []
+
+# -- Override name
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Service account
+serviceAccount:
+  create: true
+  name: trading-platform-sa
+  annotations: {}
+
+# -- Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+# -- Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+# -- Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+# -- Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: api.trading-platform.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: trading-platform-tls
+      hosts:
+        - api.trading-platform.dev
+
+# -- Resource limits
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+# -- HorizontalPodAutoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# -- Liveness probe
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# -- Readiness probe
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# -- Startup probe
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 12
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Tolerations
+tolerations: []
+
+# -- Affinity (anti-affinity spread across nodes)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - trading-platform
+          topologyKey: kubernetes.io/hostname
+
+# -- Environment variables from ConfigMap
+config:
+  NODE_ENV: "production"
+  PORT: "3000"
+  JWT_EXPIRATION: "15m"
+  REFRESH_TOKEN_EXPIRATION: "7d"
+  LOG_LEVEL: "info"
+  CORS_ORIGIN: "https://app.trading-platform.dev"
+
+# -- Secrets (set via --set or values override, NOT committed)
+# secrets:
+#   DATABASE_URL: ""
+#   JWT_SECRET: ""
+#   POLYGON_API_KEY: ""
+#   STRIPE_SECRET_KEY: ""
+
+# -- Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2

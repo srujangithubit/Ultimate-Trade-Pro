@@ -1,0 +1,21 @@
+# =============================================================================
+# Trading Platform API - ConfigMap
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trading-platform-config
+  namespace: production
+  labels:
+    app: trading-platform-api
+    app.kubernetes.io/name: trading-platform-api
+    app.kubernetes.io/component: config
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  JWT_EXPIRATION: "15m"
+  REFRESH_TOKEN_EXPIRATION: "7d"
+  LOG_LEVEL: "info"
+  CORS_ORIGIN: "https://app.trading-platform.dev"
+  RATE_LIMIT_TTL: "60"
+  RATE_LIMIT_MAX: "100"

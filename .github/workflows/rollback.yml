@@ -1,0 +1,98 @@
+# =============================================================================
+# Rollback Deployment - Manual Trigger
+# =============================================================================
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag (commit SHA) to rollback to"
+        required: true
+        type: string
+      reason:
+        description: "Reason for rollback"
+        required: true
+        type: string
+      use_k8s_rollback:
+        description: "Use kubectl rollout undo instead of specific image tag"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/trading-platform
+  K8S_NAMESPACE: production
+
+jobs:
+  rollback:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.28.0"
+
+      - name: Set Kubernetes context
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Record current state
+        id: current
+        run: |
+          echo "📋 Current deployment state:"
+          kubectl get deployment trading-platform-api \
+            -n ${{ env.K8S_NAMESPACE }} \
+            -o jsonpath='{.spec.template.spec.containers[0].image}'
+          echo ""
+          kubectl rollout history deployment/trading-platform-api \
+            -n ${{ env.K8S_NAMESPACE }} --revision=0
+
+      - name: Rollback via kubectl undo
+        if: ${{ inputs.use_k8s_rollback }}
+        run: |
+          echo "🔄 Rolling back using kubectl rollout undo..."
+          kubectl rollout undo deployment/trading-platform-api \
+            -n ${{ env.K8S_NAMESPACE }}
+          kubectl rollout status deployment/trading-platform-api \
+            -n ${{ env.K8S_NAMESPACE }} \
+            --timeout=300s
+
+      - name: Rollback to specific image tag
+        if: ${{ !inputs.use_k8s_rollback }}
+        run: |
+          echo "🔄 Rolling back to image tag: ${{ inputs.image_tag }}"
+          kubectl set image deployment/trading-platform-api \
+            api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }} \
+            --namespace=${{ env.K8S_NAMESPACE }}
+          kubectl rollout status deployment/trading-platform-api \
+            -n ${{ env.K8S_NAMESPACE }} \
+            --timeout=300s
+
+      - name: Verify rollback
+        run: |
+          echo "✅ Rollback verification:"
+          kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=trading-platform-api
+          echo ""
+          echo "Current image:"
+          kubectl get deployment trading-platform-api \
+            -n ${{ env.K8S_NAMESPACE }} \
+            -o jsonpath='{.spec.template.spec.containers[0].image}'
+
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "⚠️ *Production Rollback Executed*\nTarget: `${{ inputs.image_tag || 'previous revision' }}`\nReason: ${{ inputs.reason }}\nBy: ${{ github.actor }}\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -1,0 +1,1443 @@
+openapi: 3.0.3
+info:
+  title: Trading Platform API
+  version: 1.0.0
+  description: |
+    Complete REST API for the Trading Backtesting Platform.
+    Provides endpoints for authentication, backtesting sessions, trade journaling,
+    analytics, playbooks, broker integrations, and subscription management.
+  contact:
+    name: Trading Platform Support
+    email: support@tradingplatform.com
+    url: https://docs.tradingplatform.com
+  license:
+    name: Proprietary
+    url: https://tradingplatform.com/terms
+
+servers:
+  - url: https://api.tradingplatform.com/v1
+    description: Production
+  - url: https://staging-api.tradingplatform.com/v1
+    description: Staging
+  - url: http://localhost:3000
+    description: Local Development
+
+tags:
+  - name: Authentication
+    description: User signup, signin, token refresh, and password management
+  - name: Users
+    description: User profile and preferences management
+  - name: Backtesting
+    description: Backtesting sessions, trades, and positions
+  - name: Trade Journal
+    description: Trade logging, tagging, and screenshots
+  - name: Playbooks
+    description: Trading strategy playbooks and performance
+  - name: Analytics
+    description: Performance metrics and reporting
+  - name: Broker Connections
+    description: Broker integration and trade syncing
+  - name: Notifications
+    description: User notifications and preferences
+  - name: Subscriptions
+    description: Billing, plans, and invoices
+  - name: Market Data
+    description: Historical prices and symbol lookup
+
+paths:
+  # ── Authentication ──────────────────────────
+  /auth/signup:
+    post:
+      operationId: signup
+      summary: Register a new user
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: trader@example.com
+              password: SecureP@ss1
+              displayName: Jane Trader
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/signin:
+    post:
+      operationId: signin
+      summary: Authenticate an existing user
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: trader@example.com
+              password: SecureP@ss1
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      summary: Refresh an access token
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      summary: Request a password reset email
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Reset email sent (always returns 200 for security)
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      summary: Reset password with token
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 6
+      responses:
+        '200':
+          description: Password updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/verify-email:
+    post:
+      operationId: verifyEmail
+      summary: Verify email address
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Email verified
+
+  # ── Users ───────────────────────────────────
+  /users/me:
+    get:
+      operationId: getProfile
+      summary: Get current user profile
+      tags: [Users]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      operationId: updateProfile
+      summary: Update current user profile
+      tags: [Users]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /users/me/preferences:
+    put:
+      operationId: updatePreferences
+      summary: Update user preferences
+      tags: [Users]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Preferences saved
+
+  # ── Backtesting Sessions ────────────────────
+  /backtesting/sessions:
+    get:
+      operationId: listSessions
+      summary: List backtesting sessions
+      tags: [Backtesting]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/SessionStatus'
+      responses:
+        '200':
+          description: Paginated session list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSessions'
+    post:
+      operationId: createSession
+      summary: Create a new backtesting session
+      tags: [Backtesting]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+            example:
+              sessionName: My First Backtest
+              instrument: AAPL
+              assetClass: stock
+              startingBalance: 10000
+              startDate: '2024-01-01'
+              endDate: '2024-12-31'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestingSession'
+
+  /backtesting/sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: getSession
+      summary: Get session details
+      tags: [Backtesting]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestingSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateSession
+      summary: Update session (e.g. playback speed, status)
+      tags: [Backtesting]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSessionRequest'
+      responses:
+        '200':
+          description: Session updated
+    delete:
+      operationId: deleteSession
+      summary: Delete a session
+      tags: [Backtesting]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '204':
+          description: Session deleted
+
+  /backtesting/sessions/{sessionId}/trades:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: listSessionTrades
+      summary: List trades in a session
+      tags: [Backtesting]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Trade list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BacktestingTrade'
+    post:
+      operationId: createSessionTrade
+      summary: Place a trade in a session
+      tags: [Backtesting]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTradeRequest'
+      responses:
+        '201':
+          description: Trade placed
+
+  /backtesting/sessions/{sessionId}/positions:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: listPositions
+      summary: List open positions in a session
+      tags: [Backtesting]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Position list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Position'
+
+  # ── Trade Journal ───────────────────────────
+  /trades:
+    get:
+      operationId: listTrades
+      summary: List journal trades
+      tags: [Trade Journal]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: instrument
+          in: query
+          schema:
+            type: string
+        - name: direction
+          in: query
+          schema:
+            $ref: '#/components/schemas/TradeDirection'
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Paginated trades
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTrades'
+    post:
+      operationId: createTrade
+      summary: Log a new trade
+      tags: [Trade Journal]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJournalTradeRequest'
+      responses:
+        '201':
+          description: Trade logged
+
+  /trades/{tradeId}:
+    parameters:
+      - name: tradeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getTrade
+      summary: Get trade details
+      tags: [Trade Journal]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Trade details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trade'
+    patch:
+      operationId: updateTrade
+      summary: Update a trade
+      tags: [Trade Journal]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTradeRequest'
+      responses:
+        '200':
+          description: Trade updated
+    delete:
+      operationId: deleteTrade
+      summary: Delete a trade
+      tags: [Trade Journal]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '204':
+          description: Trade deleted
+
+  /trades/import:
+    post:
+      operationId: importTrades
+      summary: Import trades from CSV
+      tags: [Trade Journal]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                broker:
+                  type: string
+      responses:
+        '200':
+          description: Import results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                  skipped:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+  /trades/tags:
+    get:
+      operationId: listTags
+      summary: List user's trade tags
+      tags: [Trade Journal]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Tag list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TradeTag'
+    post:
+      operationId: createTag
+      summary: Create a trade tag
+      tags: [Trade Journal]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTagRequest'
+      responses:
+        '201':
+          description: Tag created
+
+  # ── Playbooks ───────────────────────────────
+  /playbooks:
+    get:
+      operationId: listPlaybooks
+      summary: List playbooks
+      tags: [Playbooks]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Playbook list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Playbook'
+    post:
+      operationId: createPlaybook
+      summary: Create a playbook
+      tags: [Playbooks]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlaybookRequest'
+      responses:
+        '201':
+          description: Playbook created
+
+  /playbooks/{playbookId}:
+    parameters:
+      - name: playbookId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getPlaybook
+      summary: Get playbook details with performance
+      tags: [Playbooks]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Playbook with performance metrics
+    patch:
+      operationId: updatePlaybook
+      summary: Update a playbook
+      tags: [Playbooks]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlaybookRequest'
+      responses:
+        '200':
+          description: Playbook updated
+    delete:
+      operationId: deletePlaybook
+      summary: Delete a playbook
+      tags: [Playbooks]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '204':
+          description: Playbook deleted
+
+  # ── Analytics ───────────────────────────────
+  /analytics/overview:
+    get:
+      operationId: getOverview
+      summary: Get performance overview
+      tags: [Analytics]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [7d, 30d, 90d, 1y, all]
+      responses:
+        '200':
+          description: Overview metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOverview'
+
+  /analytics/equity-curve:
+    get:
+      operationId: getEquityCurve
+      summary: Get equity curve data points
+      tags: [Analytics]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Equity curve
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date:
+                      type: string
+                      format: date
+                    balance:
+                      type: number
+
+  /analytics/daily-performance:
+    get:
+      operationId: getDailyPerformance
+      summary: Get daily P&L breakdown
+      tags: [Analytics]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Daily performance
+
+  # ── Broker Connections ──────────────────────
+  /brokers:
+    get:
+      operationId: listBrokers
+      summary: List available brokers
+      tags: [Broker Connections]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Broker list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BrokerConfig'
+
+  /brokers/connections:
+    get:
+      operationId: listConnections
+      summary: List user's broker connections
+      tags: [Broker Connections]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Connection list
+    post:
+      operationId: connectBroker
+      summary: Connect a broker account
+      tags: [Broker Connections]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brokerId, credentials]
+              properties:
+                brokerId:
+                  type: string
+                  format: uuid
+                credentials:
+                  type: object
+      responses:
+        '201':
+          description: Broker connected
+
+  /brokers/connections/{connectionId}/sync:
+    parameters:
+      - name: connectionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: syncBroker
+      summary: Trigger manual broker sync
+      tags: [Broker Connections]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '202':
+          description: Sync started
+
+  # ── Notifications ───────────────────────────
+  /notifications:
+    get:
+      operationId: listNotifications
+      summary: List user notifications
+      tags: [Notifications]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Notification list
+
+  /notifications/{notificationId}/read:
+    post:
+      operationId: markRead
+      summary: Mark notification as read
+      tags: [Notifications]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Marked as read
+
+  # ── Subscriptions ───────────────────────────
+  /subscriptions:
+    get:
+      operationId: getSubscription
+      summary: Get current subscription
+      tags: [Subscriptions]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+
+  /subscriptions/checkout:
+    post:
+      operationId: createCheckout
+      summary: Create Stripe checkout session
+      tags: [Subscriptions]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tier]
+              properties:
+                tier:
+                  $ref: '#/components/schemas/SubscriptionTier'
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkoutUrl:
+                    type: string
+                    format: uri
+
+  /subscriptions/cancel:
+    post:
+      operationId: cancelSubscription
+      summary: Cancel subscription at period end
+      tags: [Subscriptions]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Cancellation scheduled
+
+  /subscriptions/invoices:
+    get:
+      operationId: listInvoices
+      summary: List payment invoices
+      tags: [Subscriptions]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Invoice list
+
+  # ── Market Data ─────────────────────────────
+  /market-data/symbols:
+    get:
+      operationId: searchSymbols
+      summary: Search symbols
+      tags: [Market Data]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: assetClass
+          in: query
+          schema:
+            $ref: '#/components/schemas/AssetClass'
+      responses:
+        '200':
+          description: Symbol results
+
+  /market-data/historical:
+    get:
+      operationId: getHistoricalPrices
+      summary: Get historical OHLCV data
+      tags: [Market Data]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: timeframe
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: ['1m', '5m', '15m', '1h', '4h', '1d']
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OHLCV candles
+
+# ═══════════════════════════════════════════════
+# Components
+# ═══════════════════════════════════════════════
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Validation errors
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+
+  schemas:
+    # ── Enums ──
+    SubscriptionTier:
+      type: string
+      enum: [free, pro, team, enterprise]
+    SessionStatus:
+      type: string
+      enum: [active, paused, completed, archived]
+    TradeDirection:
+      type: string
+      enum: [long, short]
+    AssetClass:
+      type: string
+      enum: [stock, forex, crypto, futures, options, index]
+    TradeSource:
+      type: string
+      enum: [backtest, live, manual, imported]
+
+    # ── Auth ──
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+    RegisterRequest:
+      allOf:
+        - $ref: '#/components/schemas/LoginRequest'
+        - type: object
+          properties:
+            displayName:
+              type: string
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+
+    # ── User ──
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        subscriptionTier:
+          $ref: '#/components/schemas/SubscriptionTier'
+        isEmailVerified:
+          type: boolean
+        twoFactorEnabled:
+          type: boolean
+        preferences:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+    UpdateUserRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+
+    # ── Backtesting ──
+    BacktestingSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionName:
+          type: string
+        instrument:
+          type: string
+        assetClass:
+          $ref: '#/components/schemas/AssetClass'
+        startingBalance:
+          type: number
+        currentBalance:
+          type: number
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        playbackSpeed:
+          type: integer
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        createdAt:
+          type: string
+          format: date-time
+    CreateSessionRequest:
+      type: object
+      required: [sessionName, instrument, assetClass, startingBalance, startDate, endDate]
+      properties:
+        sessionName:
+          type: string
+        instrument:
+          type: string
+        assetClass:
+          $ref: '#/components/schemas/AssetClass'
+        startingBalance:
+          type: number
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        playbookId:
+          type: string
+          format: uuid
+    UpdateSessionRequest:
+      type: object
+      properties:
+        playbackSpeed:
+          type: integer
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+    PaginatedSessions:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BacktestingSession'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # ── Trades ──
+    BacktestingTrade:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        direction:
+          $ref: '#/components/schemas/TradeDirection'
+        entryPrice:
+          type: number
+        exitPrice:
+          type: number
+        quantity:
+          type: number
+        stopLoss:
+          type: number
+        takeProfit:
+          type: number
+        pnlNet:
+          type: number
+        entryDatetime:
+          type: string
+          format: date-time
+        exitDatetime:
+          type: string
+          format: date-time
+    CreateTradeRequest:
+      type: object
+      required: [direction, entryPrice, quantity, entryDatetime]
+      properties:
+        direction:
+          $ref: '#/components/schemas/TradeDirection'
+        entryPrice:
+          type: number
+        quantity:
+          type: number
+        stopLoss:
+          type: number
+        takeProfit:
+          type: number
+        entryDatetime:
+          type: string
+          format: date-time
+    Trade:
+      allOf:
+        - $ref: '#/components/schemas/BacktestingTrade'
+        - type: object
+          properties:
+            source:
+              $ref: '#/components/schemas/TradeSource'
+            instrument:
+              type: string
+            assetClass:
+              $ref: '#/components/schemas/AssetClass'
+            fees:
+              type: number
+            commission:
+              type: number
+            pnlPercentage:
+              type: number
+            riskRewardRatio:
+              type: number
+            tradeDurationMinutes:
+              type: integer
+            notes:
+              type: string
+            tags:
+              type: array
+              items:
+                type: string
+    CreateJournalTradeRequest:
+      type: object
+      required: [instrument, assetClass, direction, entryPrice, quantity, entryDatetime]
+      properties:
+        instrument:
+          type: string
+        assetClass:
+          $ref: '#/components/schemas/AssetClass'
+        direction:
+          $ref: '#/components/schemas/TradeDirection'
+        entryPrice:
+          type: number
+        exitPrice:
+          type: number
+        quantity:
+          type: number
+        entryDatetime:
+          type: string
+          format: date-time
+        exitDatetime:
+          type: string
+          format: date-time
+        stopLoss:
+          type: number
+        takeProfit:
+          type: number
+        notes:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+    UpdateTradeRequest:
+      type: object
+      properties:
+        exitPrice:
+          type: number
+        exitDatetime:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+    PaginatedTrades:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Trade'
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+    TradeTag:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tagName:
+          type: string
+        tagCategory:
+          type: string
+        colorCode:
+          type: string
+    CreateTagRequest:
+      type: object
+      required: [tagName]
+      properties:
+        tagName:
+          type: string
+        tagCategory:
+          type: string
+          enum: [setup, mistake, timeframe, custom]
+        colorCode:
+          type: string
+    Position:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        instrument:
+          type: string
+        direction:
+          $ref: '#/components/schemas/TradeDirection'
+        quantity:
+          type: number
+        entryPrice:
+          type: number
+        currentPrice:
+          type: number
+        unrealizedPnl:
+          type: number
+        stopLoss:
+          type: number
+        takeProfit:
+          type: number
+        status:
+          type: string
+          enum: [open, closed]
+
+    # ── Playbooks ──
+    Playbook:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        entryRules:
+          type: array
+          items:
+            type: object
+        exitRules:
+          type: array
+          items:
+            type: object
+        riskParameters:
+          type: object
+        instruments:
+          type: array
+          items:
+            type: string
+        timeframes:
+          type: array
+          items:
+            type: string
+        isPublic:
+          type: boolean
+        version:
+          type: integer
+        performance:
+          $ref: '#/components/schemas/PlaybookPerformance'
+    PlaybookPerformance:
+      type: object
+      properties:
+        totalTrades:
+          type: integer
+        winningTrades:
+          type: integer
+        losingTrades:
+          type: integer
+        winRate:
+          type: number
+        avgPnl:
+          type: number
+        profitFactor:
+          type: number
+        maxDrawdown:
+          type: number
+    CreatePlaybookRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        entryRules:
+          type: array
+          items:
+            type: object
+        exitRules:
+          type: array
+          items:
+            type: object
+        riskParameters:
+          type: object
+        instruments:
+          type: array
+          items:
+            type: string
+        timeframes:
+          type: array
+          items:
+            type: string
+    UpdatePlaybookRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        entryRules:
+          type: array
+          items:
+            type: object
+        exitRules:
+          type: array
+          items:
+            type: object
+        riskParameters:
+          type: object
+
+    # ── Analytics ──
+    AnalyticsOverview:
+      type: object
+      properties:
+        totalTrades:
+          type: integer
+        winRate:
+          type: number
+        profitFactor:
+          type: number
+        totalPnl:
+          type: number
+        avgWin:
+          type: number
+        avgLoss:
+          type: number
+        largestWin:
+          type: number
+        largestLoss:
+          type: number
+        maxDrawdown:
+          type: number
+        sharpeRatio:
+          type: number
+        currentStreak:
+          type: integer
+
+    # ── Broker ──
+    BrokerConfig:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        brokerName:
+          type: string
+        displayName:
+          type: string
+        authType:
+          type: string
+          enum: [oauth, api_key, credentials]
+        active:
+          type: boolean
+
+    # ── Subscription ──
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tier:
+          $ref: '#/components/schemas/SubscriptionTier'
+        status:
+          type: string
+          enum: [active, canceled, expired, past_due]
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        cancelAtPeriodEnd:
+          type: boolean
+
+    # ── Errors ──
+    ErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+    ValidationErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 422
+        message:
+          type: array
+          items:
+            type: string
+        error:
+          type: string
+          example: Unprocessable Entity

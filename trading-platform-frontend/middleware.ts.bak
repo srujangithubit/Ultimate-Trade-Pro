@@ -1,0 +1,57 @@
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export function middleware(_request: NextRequest) {
+    // We can't access localStorage in middleware, but we can check for cookies if we used them.
+    // Since we are using localStorage for tokens (client-side), middleware based on tokens is limited.
+    // However, for a robust app, we often use cookies for the refresh token.
+    //
+    // BUT, the current plan relies on client-side checking or we need to rethink if we want middleware protection.
+    // Since the user agreed to the plan which included middleware.ts, 
+    // and we are using localStorage, we can't actually read the token here easily unless we switch to cookies.
+    //
+    // WAIT. If we strictly use localStorage, middleware can't see it.
+    // The plan mentioned "Create middleware to protect routes".
+    // PROPER SOLUTION: We should use a client-side layout check OR switch to cookies.
+    //
+    // Given the current setup with `client.ts` using localStorage, 
+    // switching to cookies is a bigger refactor.
+    //
+    // However, `middleware.ts` is still useful if we ever set a cookie.
+    //
+    // Let's implement a Client-Side route protection in proper `AuthProvider` and `useAuth` hook first?
+    // OR, we can try to check for a cookie if we set one.
+    // 
+    // Let's stick to the plan but realize the limitation: 
+    // Middleware runs on the server. LocalStorage is on the client.
+    //
+    // If we want TRUE middleware protection, we must set a cookie.
+    // Let's assume for now we will rely on client-side redirection in AuthProvider/Layout for "Authentication",
+    // essentially making the page load a "Loading..." state until check is done.
+    // 
+    // However, the user asked for "Proper" authentication. 
+    // "Proper" usually implies cookies for middleware.
+    // But changing to cookies might break the existing backend if it expects Bearer header only.
+    // The Backend uses `ExtractJwt.fromAuthHeaderAsBearerToken()`.
+    //
+    // So we can stick to Client-Side protection for now as it's "safe enough" for a SPA-like experience, 
+    // or we can add a cookie just for the middleware to know "logged in status".
+    //
+    // Let's implement the purely client-side protection first via `AuthProvider` interactions 
+    // and maybe just use Middleware for simple path rewrites if needed, or skip it if it does nothing without cookies.
+    //
+    // actually, let's write the middleware to be ready, but maybe it won't be active yet without cookies.
+    // 
+    // WAITING: I'll skip middleware for a second and focus on AuthProvider which is the real "protection" for localStorage apps.
+    // 
+    // RE-READING PLAN: "Create middleware to protect routes".
+    // I will write a basic middleware that allows everything for now or checks for a specific cookie if I decide to set one.
+    //
+    // actually, let's implement the CLIENT SIDE protection first.
+
+    return NextResponse.next();
+}
+
+export const config = {
+    matcher: ['/overview/:path*', '/settings/:path*'],
+};

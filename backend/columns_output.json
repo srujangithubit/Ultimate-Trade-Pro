@@ -1,0 +1,51 @@
+Columns in 'users' table:
+[
+  {
+    "column_name": "is_verified",
+    "data_type": "boolean"
+  },
+  {
+    "column_name": "lastLogin",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "column_name": "createdAt",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "column_name": "updatedAt",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "column_name": "refreshTokenHash",
+    "data_type": "character varying"
+  },
+  {
+    "column_name": "display_name",
+    "data_type": "character varying"
+  },
+  {
+    "column_name": "password_hash",
+    "data_type": "character varying"
+  },
+  {
+    "column_name": "email",
+    "data_type": "character varying"
+  },
+  {
+    "column_name": "passwordHash",
+    "data_type": "character varying"
+  },
+  {
+    "column_name": "firstName",
+    "data_type": "character varying"
+  },
+  {
+    "column_name": "lastName",
+    "data_type": "character varying"
+  }
+]

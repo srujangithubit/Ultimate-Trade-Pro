@@ -1,0 +1,22 @@
+# =============================================================================
+# Trading Platform API - Service
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-platform-api-service
+  namespace: production
+  labels:
+    app: trading-platform-api
+    app.kubernetes.io/name: trading-platform-api
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app: trading-platform-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+      protocol: TCP
+  sessionAffinity: None

@@ -1,0 +1,235 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  email String @unique
+  passwordHash String? @map("password_hash")
+  displayName String? @map("display_name")
+  isVerified Boolean @default(false) @map("is_verified")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sessions UserSession[]
+  preferences UserPreferences?
+  subscription UserSubscription?
+  accounts TradingAccount[]
+  playbooks Playbook[]
+  trades Trade[]
+  backtestingSessions BacktestingSession[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String @map("refresh_token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  userAgent String? @map("user_agent")
+  ipAddress String? @map("ip_address")
+
+  @@index([refreshTokenHash])
+  @@map("user_sessions")
+}
+
+model UserPreferences {
+  userId String @id @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme String @default("dark")
+  chartSettings Json? @default("{}") @map("chart_settings")
+  notificationSettings Json? @default("{}") @map("notification_settings")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_preferences")
+}
+
+model UserSubscription {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId String? @map("stripe_customer_id")
+  stripeSubscriptionId String? @map("stripe_subscription_id")
+  planTier String @default("free") @map("plan_tier")
+  status String @default("active")
+  currentPeriodEnd DateTime? @map("current_period_end")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_subscriptions")
+}
+
+model TradingAccount {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  broker String?
+  accountType String @default("live") @map("account_type")
+  currency String @default("USD")
+  balance Decimal @default(0) @db.Decimal(18, 2)
+  equity Decimal @default(0) @db.Decimal(18, 2)
+  accountLogin String? @unique @map("account_login")
+  server String?
+  apiKeyHash String? @map("api_key_hash")
+  lastSeen DateTime? @map("last_seen")
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  backtestingSessions BacktestingSession[]
+  trades Trade[]
+
+  @@index([apiKeyHash])
+  @@index([userId, active])
+  @@map("trading_accounts")
+}
+
+model BacktestingSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId String? @map("account_id") @db.Uuid
+  account TradingAccount? @relation(fields: [accountId], references: [id])
+  name String
+  status String @default("created")
+  configuration Json
+  currentTime DateTime? @map("current_time")
+  replayIndex Int @default(0) @map("replay_index")
+  candleCache Json? @map("candle_cache")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  trades Trade[]
+  snapshots SessionSnapshot[]
+  chartDrawings ChartDrawing[]
+
+  @@index([userId, status])
+  @@map("backtesting_sessions")
+}
+
+model SessionSnapshot {
+  id String @id @default(uuid()) @db.Uuid
+  sessionId String @map("session_id") @db.Uuid
+  session BacktestingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  snapshotTime DateTime @default(now()) @map("snapshot_time")
+  simulationState Json @map("simulation_state")
+
+  @@map("session_snapshots")
+}
+
+model Playbook {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  description String?
+  rules Json? @default("[]")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  tags Json? @default("[]")
+  
+  trades Trade[]
+
+  @@map("playbooks")
+}
+
+model Trade {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId String? @map("account_id") @db.Uuid
+  account TradingAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  playbookId String? @map("playbook_id") @db.Uuid
+  playbook Playbook? @relation(fields: [playbookId], references: [id])
+  backtestSessionId String? @map("backtest_session_id") @db.Uuid
+  backtestSession BacktestingSession? @relation(fields: [backtestSessionId], references: [id], onDelete: Cascade)
+
+  symbol String
+  direction String
+  setup String?
+  entryDate DateTime @map("entry_date")
+  exitDate DateTime? @map("exit_date")
+  
+  entryPrice Decimal @map("entry_price") @db.Decimal(18, 8)
+  exitPrice Decimal? @map("exit_price") @db.Decimal(18, 8)
+  quantity Decimal @db.Decimal(18, 8)
+  
+  pnlGross Decimal? @map("pnl_gross") @db.Decimal(18, 2)
+  pnlNet Decimal? @map("pnl_net") @db.Decimal(18, 2)
+  fees Decimal? @default(0) @db.Decimal(18, 2)
+  
+  stopLoss Decimal? @map("stop_loss") @db.Decimal(18, 8)
+  takeProfit Decimal? @map("take_profit") @db.Decimal(18, 8)
+  status String @default("OPEN")
+  notes String?
+  tags String[]
+  customMetrics Json? @default("{}") @map("custom_metrics")
+
+  // MT5 sync fields
+  ticket Int?
+  magic Int?
+  comment String? @map("mt5_comment")
+  source String @default("manual")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  screenshots TradeScreenshot[]
+
+  @@unique([accountId, ticket])
+  @@index([userId, entryDate(sort: Desc)])
+  @@index([symbol])
+  @@index([accountId, entryDate(sort: Desc)])
+  @@map("trades")
+}
+
+model TradeScreenshot {
+  id String @id @default(uuid()) @db.Uuid
+  tradeId String @map("trade_id") @db.Uuid
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  url String
+  caption String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("trade_screenshots")
+}
+
+// TimescaleDB Hypertable
+model MarketDataCandle {
+  time DateTime
+  symbol String
+  resolution String
+  open Decimal @db.Decimal(18, 8)
+  high Decimal @db.Decimal(18, 8)
+  low Decimal @db.Decimal(18, 8)
+  close Decimal @db.Decimal(18, 8)
+  volume BigInt
+  vwap Decimal? @db.Decimal(18, 8)
+  trades BigInt?
+
+  @@unique([time, symbol, resolution])
+  @@index([symbol, time(sort: Desc)])
+  @@map("market_data_candles")
+}
+
+model ChartDrawing {
+  id String @id @default(uuid()) @db.Uuid
+  sessionId String @map("session_id") @db.Uuid
+  session BacktestingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type String
+  data Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([sessionId])
+  @@map("chart_drawings")
+}
