@@ -153,6 +153,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trading_platform_test?schema=public
           JWT_SECRET: test-jwt-secret
+          JWT_REFRESH_SECRET: test-jwt-refresh-secret
           JWT_EXPIRATION: 15m
           NODE_ENV: test
           REDIS_HOST: localhost

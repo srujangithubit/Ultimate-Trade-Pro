@@ -176,7 +176,7 @@ describe('Auth API (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/refresh')
         .send({
-          userId: 'some-user-id',
+          userId: '00000000-0000-0000-0000-000000000000',
           refreshToken: 'invalid-token',
         })
         .expect(403);

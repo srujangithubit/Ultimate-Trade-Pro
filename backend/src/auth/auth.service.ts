@@ -92,10 +92,15 @@ export class AuthService {
    * Refresh the access token using a valid refresh token.
    */
   async refreshToken(userId: string, refreshToken: string): Promise<Tokens> {
-    const session = await this.prisma.userSession.findFirst({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+    let session;
+    try {
+      session = await this.prisma.userSession.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch {
+      throw new ForbiddenException('Access denied');
+    }
 
     if (!session) {
       throw new ForbiddenException('Access denied');
