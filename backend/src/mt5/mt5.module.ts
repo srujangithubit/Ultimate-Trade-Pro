@@ -5,8 +5,8 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AccountsModule } from '../accounts/accounts.module';
 
 @Module({
-    imports: [PrismaModule, AccountsModule],
-    controllers: [Mt5Controller],
-    providers: [Mt5Service],
+  imports: [PrismaModule, AccountsModule],
+  controllers: [Mt5Controller],
+  providers: [Mt5Service],
 })
-export class Mt5Module { }
+export class Mt5Module {}

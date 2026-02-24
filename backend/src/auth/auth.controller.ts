@@ -6,7 +6,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  Req,
 } from '@nestjs/common';
 import { AuthService, Tokens } from './auth.service';
 import { AuthDto, RegisterDto } from './dto/auth.dto';
@@ -15,7 +14,7 @@ import { GetUser } from './decorator';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -40,8 +39,7 @@ export class AuthController {
 
   @UseGuards(JwtGuard)
   @Get('me')
-  async getMe(@GetUser() user: any) {
+  getMe(@GetUser() user: Record<string, unknown>) {
     return user;
   }
 }
-

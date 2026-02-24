@@ -7,4 +7,4 @@ import { BacktestingController } from './backtesting.controller';
   providers: [BacktestingService],
   exports: [BacktestingService],
 })
-export class BacktestingModule { }
+export class BacktestingModule {}

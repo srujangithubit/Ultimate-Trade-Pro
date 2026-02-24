@@ -1,11 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateTradeDto } from './dto/create-trade.dto';
 import { UpdateTradeDto } from './dto/update-trade.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class TradesService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateTradeDto) {
     // If exit price is provided, calculate PnL and set status to CLOSED
@@ -16,7 +20,8 @@ export class TradesService {
     if (dto.exitPrice != null && dto.quantity) {
       status = 'CLOSED';
       const multiplier = dto.direction?.toUpperCase() === 'SHORT' ? -1 : 1;
-      const calculatedGross = (dto.exitPrice - dto.entryPrice) * dto.quantity * multiplier;
+      const calculatedGross =
+        (dto.exitPrice - dto.entryPrice) * dto.quantity * multiplier;
       pnlGross = calculatedGross;
       pnlNet = calculatedGross - (dto.fees || 0);
     }
@@ -63,14 +68,15 @@ export class TradesService {
     });
 
     if (!trade) throw new NotFoundException('Trade not found');
-    if (trade.userId !== userId) throw new ForbiddenException('Access to trade denied');
+    if (trade.userId !== userId)
+      throw new ForbiddenException('Access to trade denied');
 
     return trade;
   }
 
   async update(userId: string, id: string, dto: UpdateTradeDto) {
     // Check ownership first
-    const trade = await this.findOne(userId, id);
+    await this.findOne(userId, id);
 
     return this.prisma.trade.update({
       where: {

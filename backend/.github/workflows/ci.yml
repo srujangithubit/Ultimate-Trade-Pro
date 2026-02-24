@@ -13,6 +13,8 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
     defaults:
       run:
         working-directory: backend
@@ -26,10 +28,13 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - run: npm ci
+      - run: npx prisma generate
       - run: npm run lint
 
   unit-tests:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
     defaults:
       run:
         working-directory: backend
@@ -43,6 +48,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - run: npm ci
+      - run: npx prisma generate
       - run: npm run test:cov
 
       - name: Upload coverage report
@@ -92,6 +98,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - run: npm ci
+      - run: npx prisma generate
       - run: npx prisma db push --skip-generate || true
       - run: npm run test:e2e
 
@@ -131,5 +138,6 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - run: npm ci
+      - run: npx prisma generate
       - run: npx prisma db push --skip-generate || true
       - run: npx jest --config ./test/jest-e2e.json test/security.spec.ts

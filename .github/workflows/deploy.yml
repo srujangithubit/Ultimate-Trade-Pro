@@ -23,6 +23,8 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trading_platform_test?schema=public
     services:
       postgres:
         image: postgres:16-alpine
@@ -56,6 +58,9 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      - name: Push database schema
+        run: npx prisma db push --skip-generate
+
       - name: Run unit tests
         run: npm test -- --ci
 
@@ -64,6 +69,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trading_platform_test?schema=public
           JWT_SECRET: test-jwt-secret
+          JWT_REFRESH_SECRET: test-jwt-refresh-secret
           JWT_EXPIRATION: 15m
           NODE_ENV: test
 

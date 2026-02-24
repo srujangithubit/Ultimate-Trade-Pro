@@ -151,6 +151,48 @@ export default function JournalPage() {
         return { ...trade, pnl, pnlPercent };
     });
 
+    const exportCSV = () => {
+        if (tradesWithPnL.length === 0) return;
+
+        const headers = [
+            'Date', 'Symbol', 'Direction', 'Entry Price', 'Exit Price',
+            'Quantity', 'P&L ($)', 'P&L (%)', 'Setup', 'Status', 'Tags', 'Notes',
+        ];
+
+        const escapeCSV = (val: string) => {
+            if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                return `"${val.replace(/"/g, '""')}"`;
+            }
+            return val;
+        };
+
+        const rows = tradesWithPnL.map((t) => [
+            t.entryDate ? new Date(t.entryDate).toLocaleDateString() : '',
+            t.symbol || '',
+            t.direction || '',
+            t.entryPrice?.toString() || '',
+            t.exitPrice?.toString() || '',
+            t.quantity?.toString() || '',
+            t.pnl !== undefined && t.pnl !== null ? t.pnl.toFixed(2) : '',
+            t.pnlPercent !== undefined && t.pnlPercent !== null ? t.pnlPercent.toFixed(2) : '',
+            t.setup || '',
+            t.status || '',
+            (t.tags || []).join('; '),
+            (t.notes || '').replace(/\n/g, ' '),
+        ].map(escapeCSV));
+
+        const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `tradepro-journal-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const handleSubmit = () => {
         if (!formData.entryDate) {
             alert('Please select an Entry Date');
@@ -191,7 +233,12 @@ export default function JournalPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" className="gap-2 transition-transform hover:scale-105 active:scale-95">
+                    <Button
+                        variant="outline"
+                        className="gap-2 transition-transform hover:scale-105 active:scale-95"
+                        onClick={exportCSV}
+                        disabled={tradesWithPnL.length === 0}
+                    >
                         <Download className="h-4 w-4" />
                         Export CSV
                     </Button>

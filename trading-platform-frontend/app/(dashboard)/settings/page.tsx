@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
     User,
     Bell,
-    Shield,
     Palette,
     Key,
     Save,
     Moon,
     Sun,
     Monitor,
+    Shield,
+    Camera,
+    Trash2,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -20,12 +22,27 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useUserPreferences } from '@/lib/stores/userPreferencesStore';
 
 export default function SettingsPage() {
     const { user, initialize } = useAuth();
     const { theme, setTheme } = useTheme();
+    const {
+        avatarUrl,
+        setAvatarUrl,
+        currency,
+        setCurrency,
+        dateFormat,
+        setDateFormat,
+        timezone,
+        setTimezone,
+        notifications,
+        setNotification,
+    } = useUserPreferences();
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Split user displayName back into First and Last for the form inputs
     const displayNameParts = (user?.displayName || '').split(' ');
@@ -39,6 +56,60 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
 
+    const initials = user?.displayName
+        ? user.displayName.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()
+        : ((user?.firstName?.[0] || 'G') + (user?.lastName?.[0] || 'U')).toUpperCase();
+
+    const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate size (2MB max)
+        if (file.size > 2 * 1024 * 1024) {
+            alert('File too large. Maximum size is 2MB.');
+            return;
+        }
+
+        // Validate type
+        if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+            alert('Invalid file type. Please use JPG, PNG, GIF, or WebP.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+
+            // Resize to 256x256 max to keep localStorage small
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const size = Math.min(img.width, img.height, 256);
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                // Center-crop
+                const sx = (img.width - size) / 2;
+                const sy = (img.height - size) / 2;
+                ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+
+                const resizedUrl = canvas.toDataURL('image/jpeg', 0.85);
+                setAvatarUrl(resizedUrl);
+            };
+            img.src = dataUrl;
+        };
+        reader.readAsDataURL(file);
+
+        // Reset the input so the same file can be re-selected
+        e.target.value = '';
+    };
+
+    const handleRemoveAvatar = () => {
+        setAvatarUrl(null);
+    };
+
     const handleSave = async () => {
         try {
             setSaving(true);
@@ -49,7 +120,6 @@ export default function SettingsPage() {
 
             await api.patch('/users/me', {
                 displayName
-                // email: email // Backend doesn't support changing email in this DTO currently
             });
 
             // Re-fetch the user details in authStore so the navbar updates immediately
@@ -63,6 +133,13 @@ export default function SettingsPage() {
             setSaving(false);
         }
     };
+
+    const notificationItems = [
+        { key: 'backtestCompleted' as const, label: 'Backtest Completed', desc: 'Get notified when a backtest finishes running' },
+        { key: 'weeklyReport' as const, label: 'Weekly Performance Report', desc: 'Receive a weekly summary of your trading performance' },
+        { key: 'riskAlerts' as const, label: 'Risk Alerts', desc: 'Alerts when you exceed drawdown thresholds' },
+        { key: 'productUpdates' as const, label: 'Product Updates', desc: 'New features and platform announcements' },
+    ];
 
     return (
         <div className="space-y-6 max-w-4xl">
@@ -102,17 +179,40 @@ export default function SettingsPage() {
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="flex items-center gap-6">
-                                <Avatar className="h-20 w-20">
-                                    <AvatarFallback className="bg-primary/20 text-primary text-xl font-bold">
-                                        {user?.displayName
-                                            ? user.displayName.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()
-                                            : ((user?.firstName?.[0] || 'G') + (user?.lastName?.[0] || 'U')).toUpperCase()}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="space-y-2">
-                                    <Button variant="outline" size="sm">Change Avatar</Button>
-                                    <p className="text-xs text-muted-foreground">JPG, PNG or GIF. Max 2MB.</p>
+                                <div className="relative group">
+                                    <Avatar className="h-20 w-20">
+                                        {avatarUrl && <AvatarImage src={avatarUrl} alt="Profile" />}
+                                        <AvatarFallback className="bg-primary/20 text-primary text-xl font-bold">
+                                            {initials}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                    >
+                                        <Camera className="h-5 w-5 text-white" />
+                                    </button>
                                 </div>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                                            Change Avatar
+                                        </Button>
+                                        {avatarUrl && (
+                                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={handleRemoveAvatar}>
+                                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+                                            </Button>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">JPG, PNG, GIF or WebP. Max 2MB.</p>
+                                </div>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/gif,image/webp"
+                                    className="hidden"
+                                    onChange={handleAvatarUpload}
+                                />
                             </div>
 
                             <Separator />
@@ -135,7 +235,7 @@ export default function SettingsPage() {
 
                             <div className="space-y-2">
                                 <Label htmlFor="timezone">Timezone</Label>
-                                <Select defaultValue="EST">
+                                <Select value={timezone} onValueChange={setTimezone}>
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
@@ -218,7 +318,7 @@ export default function SettingsPage() {
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label>Default Currency</Label>
-                                    <Select defaultValue="USD">
+                                    <Select value={currency} onValueChange={setCurrency}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="USD">USD ($)</SelectItem>
@@ -230,7 +330,7 @@ export default function SettingsPage() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Date Format</Label>
-                                    <Select defaultValue="MM/DD/YYYY">
+                                    <Select value={dateFormat} onValueChange={setDateFormat}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
@@ -241,10 +341,9 @@ export default function SettingsPage() {
                                 </div>
                             </div>
 
-                            <Button onClick={handleSave} className="gap-2">
-                                <Save className="h-4 w-4" />
-                                {saved ? 'Saved!' : 'Save Preferences'}
-                            </Button>
+                            <div className="rounded-md bg-green-500/10 border border-green-500/20 p-3 text-sm text-green-600 dark:text-green-400">
+                                Preferences are saved automatically when you make a change.
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -257,23 +356,26 @@ export default function SettingsPage() {
                             <CardDescription>Choose what email notifications you receive.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {[
-                                { label: 'Backtest Completed', desc: 'Get notified when a backtest finishes running' },
-                                { label: 'Weekly Performance Report', desc: 'Receive a weekly summary of your trading performance' },
-                                { label: 'Risk Alerts', desc: 'Alerts when you exceed drawdown thresholds' },
-                                { label: 'Product Updates', desc: 'New features and platform announcements' },
-                            ].map((item) => (
-                                <div key={item.label} className="flex items-center justify-between rounded-lg border p-4">
+                            {notificationItems.map((item) => (
+                                <div key={item.key} className="flex items-center justify-between rounded-lg border p-4">
                                     <div>
                                         <p className="text-sm font-medium">{item.label}</p>
                                         <p className="text-xs text-muted-foreground">{item.desc}</p>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" defaultChecked className="sr-only peer" />
-                                        <div className="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-primary peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                                        <input
+                                            type="checkbox"
+                                            checked={notifications[item.key]}
+                                            onChange={(e) => setNotification(item.key, e.target.checked)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-9 h-5 bg-muted rounded-full peer peer-checked:bg-primary peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                                     </label>
                                 </div>
                             ))}
+                            <div className="rounded-md bg-green-500/10 border border-green-500/20 p-3 text-sm text-green-600 dark:text-green-400">
+                                Notification preferences are saved automatically.
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
