@@ -76,10 +76,7 @@ jobs:
         run: npx prisma generate
 
       - name: Run unit tests
-        run: npm run test -- --coverage --ci --reporters=default --reporters=jest-junit
-        env:
-          JEST_JUNIT_OUTPUT_DIR: ./reports
-          JEST_JUNIT_OUTPUT_NAME: junit.xml
+        run: npm run test -- --coverage --ci
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -148,10 +145,8 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Run database migrations
-        run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trading_platform_test?schema=public
+      - name: Push database schema
+        run: npx prisma db push --skip-generate
 
       - name: Run E2E tests
         run: npm run test:e2e
