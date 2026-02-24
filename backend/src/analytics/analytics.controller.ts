@@ -6,7 +6,7 @@ import { JwtGuard } from '../auth/guard';
 @UseGuards(JwtGuard)
 @Controller('analytics')
 export class AnalyticsController {
-  constructor(private readonly analyticsService: AnalyticsService) { }
+  constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('metrics')
   getMetrics(@GetUser('id') userId: string) {

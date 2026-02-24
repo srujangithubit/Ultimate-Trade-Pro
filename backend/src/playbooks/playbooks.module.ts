@@ -3,7 +3,7 @@ import { PlaybooksService } from './playbooks.service';
 import { PlaybooksController } from './playbooks.controller';
 
 @Module({
-    controllers: [PlaybooksController],
-    providers: [PlaybooksService],
+  controllers: [PlaybooksController],
+  providers: [PlaybooksService],
 })
-export class PlaybooksModule { }
+export class PlaybooksModule {}

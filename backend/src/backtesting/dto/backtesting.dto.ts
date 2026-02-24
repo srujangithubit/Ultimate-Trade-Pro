@@ -1,55 +1,63 @@
-import { IsString, IsNotEmpty, IsIn, IsNumber, Min, IsDateString, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsIn,
+  IsNumber,
+  Min,
+  IsDateString,
+  IsOptional,
+} from 'class-validator';
 
 export class CreateSessionDto {
-    @IsString()
-    @IsNotEmpty()
-    sessionName: string;
+  @IsString()
+  @IsNotEmpty()
+  sessionName: string;
 
-    @IsString()
-    @IsNotEmpty()
-    instrument: string;
+  @IsString()
+  @IsNotEmpty()
+  instrument: string;
 
-    @IsString()
-    @IsIn(['stock', 'crypto', 'forex', 'futures', 'options'])
-    assetClass: string;
+  @IsString()
+  @IsIn(['stock', 'crypto', 'forex', 'futures', 'options'])
+  assetClass: string;
 
-    @IsNumber()
-    @Min(0)
-    startingBalance: number;
+  @IsNumber()
+  @Min(0)
+  startingBalance: number;
 
-    @IsDateString()
-    startDate: string;
+  @IsDateString()
+  startDate: string;
 
-    @IsDateString()
-    endDate: string;
+  @IsDateString()
+  endDate: string;
 
-    @IsString()
-    @IsOptional()
-    accountId?: string;
+  @IsString()
+  @IsOptional()
+  accountId?: string;
 }
 
 export class ExecuteOrderDto {
-    @IsString()
-    @IsIn(['market', 'limit', 'stop', 'stop_limit'])
-    orderType: string;
+  @IsString()
+  @IsIn(['market', 'limit', 'stop', 'stop_limit'])
+  orderType: string;
 
-    @IsString()
-    @IsIn(['long', 'short'])
-    direction: string;
+  @IsString()
+  @IsIn(['long', 'short'])
+  direction: string;
 
-    @IsNumber()
-    @Min(0.0001)
-    quantity: number;
+  @IsNumber()
+  @Min(0.0001)
+  quantity: number;
 
-    @IsNumber()
-    @IsOptional()
-    price?: number;
+  @IsNumber()
+  @IsOptional()
+  price?: number;
 
-    @IsNumber()
-    @IsOptional()
-    stopPrice?: number;
+  @IsNumber()
+  @IsOptional()
+  stopPrice?: number;
 
-    @IsString()
-    @IsOptional()
-    notes?: string;
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }

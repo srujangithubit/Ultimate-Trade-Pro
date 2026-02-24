@@ -14,7 +14,7 @@ import { CreateSessionDto, ExecuteOrderDto } from './dto/backtesting.dto';
 
 @Controller('backtesting')
 export class BacktestingController {
-  constructor(private readonly backtestingService: BacktestingService) { }
+  constructor(private readonly backtestingService: BacktestingService) {}
 
   @Post('sessions')
   @HttpCode(HttpStatus.CREATED)

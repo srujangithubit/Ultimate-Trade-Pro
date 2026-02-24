@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { TradesService } from './trades.service';
 import { CreateTradeDto } from './dto/create-trade.dto';
 import { UpdateTradeDto } from './dto/update-trade.dto';
@@ -8,15 +17,18 @@ import { GetUser } from '../auth/decorator';
 @UseGuards(JwtGuard)
 @Controller('trades')
 export class TradesController {
-  constructor(private readonly tradesService: TradesService) { }
+  constructor(private readonly tradesService: TradesService) {}
 
   @Post()
-  async create(@GetUser('id') userId: string, @Body() createTradeDto: CreateTradeDto) {
+  async create(
+    @GetUser('id') userId: string,
+    @Body() createTradeDto: CreateTradeDto,
+  ) {
     return this.tradesService.create(userId, createTradeDto);
   }
 
   @Get()
-  async findAll(@GetUser('id') userId: string) {
+  findAll(@GetUser('id') userId: string) {
     return this.tradesService.findAll(userId);
   }
 
@@ -26,7 +38,11 @@ export class TradesController {
   }
 
   @Patch(':id')
-  update(@GetUser('id') userId: string, @Param('id') id: string, @Body() updateTradeDto: UpdateTradeDto) {
+  update(
+    @GetUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() updateTradeDto: UpdateTradeDto,
+  ) {
     return this.tradesService.update(userId, id, updateTradeDto);
   }
 
