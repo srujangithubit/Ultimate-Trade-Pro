@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import {
     TrendingUp,
     TrendingDown,
@@ -11,6 +12,7 @@ import {
     BarChart3,
     PlayCircle,
     BookOpen,
+    Wifi,
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -29,6 +31,7 @@ import { formatCurrency, formatPercent, formatDate, getPnLColor } from '@/lib/ut
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import ForexSessionIndicator from '@/components/overview/ForexSessionIndicator';
+import { useMT5 } from '@/components/mt5/MT5Context';
 
 // Define Trade interface locally valid for now
 interface Trade {
@@ -53,6 +56,17 @@ interface Trade {
 }
 
 export default function OverviewPage() {
+    const { positions, status: mt5Status, account: mt5Account, refreshPositions } = useMT5();
+
+    // Keep positions updated in real time (same interval as Live Trading tab)
+    useEffect(() => {
+        if (mt5Status.authenticated) {
+            refreshPositions();
+            const interval = setInterval(refreshPositions, 5000);
+            return () => clearInterval(interval);
+        }
+    }, [mt5Status.authenticated, refreshPositions]);
+
     const { data: stats, isLoading: isStatsLoading } = useQuery({
         queryKey: ['analytics-overview'],
         queryFn: async () => {
@@ -252,6 +266,80 @@ export default function OverviewPage() {
                     </Card>
                 </motion.div>
             </motion.div>
+
+            {/* Live Open Positions — only visible when MT5 is connected and has open positions */}
+            {mt5Status.authenticated && positions.length > 0 && (() => {
+                const totalUnrealized = positions.reduce((s, p) => s + p.profit, 0);
+                return (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                    >
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between pb-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
+                                        <Wifi className="h-4 w-4 text-emerald-500" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-base">Live Open Positions</CardTitle>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {mt5Account?.name ? `${mt5Account.name} · ` : ''}
+                                            {positions.length} position{positions.length !== 1 ? 's' : ''} · Unrealized P&L:{' '}
+                                            <span className={totalUnrealized >= 0 ? 'text-green-500 font-semibold' : 'text-red-500 font-semibold'}>
+                                                {totalUnrealized >= 0 ? '+' : ''}{totalUnrealized.toFixed(2)}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <Link href="/accounts">
+                                    <Button variant="ghost" size="sm">View all</Button>
+                                </Link>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                    {positions.map((pos) => {
+                                        const isBuy = pos.type_str === 'BUY';
+                                        const isProfit = pos.profit >= 0;
+                                        const priceFmt = (p: number) => !p ? '—' : p >= 10 ? p.toFixed(2) : p.toFixed(5);
+                                        return (
+                                            <div
+                                                key={pos.ticket}
+                                                className="rounded-xl border p-3 space-y-2 hover:bg-accent/30 transition-colors"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`h-7 w-7 flex items-center justify-center rounded-lg ${
+                                                            isBuy ? 'bg-green-500/15 text-green-500' : 'bg-red-500/15 text-red-500'
+                                                        }`}>
+                                                            {isBuy ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-semibold">{pos.symbol}</p>
+                                                            <p className="text-[10px] text-muted-foreground">{pos.type_str} · {pos.volume} lots</p>
+                                                        </div>
+                                                    </div>
+                                                    <p className={`text-sm font-bold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
+                                                        {isProfit ? '+' : ''}{pos.profit.toFixed(2)}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                                    <span>{priceFmt(pos.price_open)} → {priceFmt(pos.price_current)}</span>
+                                                    <div className="flex gap-2">
+                                                        {pos.sl ? <span>SL: {priceFmt(pos.sl)}</span> : null}
+                                                        {pos.tp ? <span>TP: {priceFmt(pos.tp)}</span> : null}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+                );
+            })()}
 
             {/* Recent trades */}
             <motion.div
