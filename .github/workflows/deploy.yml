@@ -23,6 +23,8 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/trading_platform_test?schema=public
     services:
       postgres:
         image: postgres:16-alpine
