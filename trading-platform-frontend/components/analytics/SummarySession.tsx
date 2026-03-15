@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Table,
@@ -30,7 +31,7 @@ interface SummarySessionProps {
 
 function UKFlag() {
     return (
-        <svg width="20" height="20" viewBox="0 0 60 60" className="rounded-full flex-shrink-0">
+        <svg width="20" height="20" viewBox="0 0 60 60" className="rounded-full shrink-0">
             <clipPath id="uk-clip"><circle cx="30" cy="30" r="30" /></clipPath>
             <g clipPath="url(#uk-clip)">
                 <rect width="60" height="60" fill="#012169" />
@@ -45,7 +46,7 @@ function UKFlag() {
 
 function USFlag() {
     return (
-        <svg width="20" height="20" viewBox="0 0 60 60" className="rounded-full flex-shrink-0">
+        <svg width="20" height="20" viewBox="0 0 60 60" className="rounded-full shrink-0">
             <clipPath id="us-clip"><circle cx="30" cy="30" r="30" /></clipPath>
             <g clipPath="url(#us-clip)">
                 <rect width="60" height="60" fill="#B22234" />
@@ -65,7 +66,7 @@ function USFlag() {
 
 function JPFlag() {
     return (
-        <svg width="20" height="20" viewBox="0 0 60 60" className="rounded-full flex-shrink-0">
+        <svg width="20" height="20" viewBox="0 0 60 60" className="rounded-full shrink-0">
             <clipPath id="jp-clip"><circle cx="30" cy="30" r="30" /></clipPath>
             <g clipPath="url(#jp-clip)">
                 <rect width="60" height="60" fill="#fff" />
@@ -77,7 +78,7 @@ function JPFlag() {
 
 function GlobeIcon() {
     return (
-        <svg width="20" height="20" viewBox="0 0 20 20" className="flex-shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <svg width="20" height="20" viewBox="0 0 20 20" className="shrink-0 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5">
             <circle cx="10" cy="10" r="8" />
             <ellipse cx="10" cy="10" rx="4" ry="8" />
             <path d="M2,10 H18" />
@@ -127,7 +128,7 @@ function WinRateBar({ winRate, totalTrades }: { winRate: number; totalTrades: nu
     );
 }
 
-export default function SummarySession({ data }: SummarySessionProps) {
+function SummarySession({ data }: SummarySessionProps) {
     if (!data || data.length === 0) {
         return null;
     }
@@ -224,3 +225,5 @@ export default function SummarySession({ data }: SummarySessionProps) {
         </Card>
     );
 }
+
+export default memo(SummarySession);

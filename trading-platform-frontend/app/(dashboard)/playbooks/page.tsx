@@ -208,7 +208,7 @@ export default function PlaybooksPage() {
                             New Playbook
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-lg">
+                    <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Create Playbook</DialogTitle>
                             <DialogDescription>
@@ -321,7 +321,7 @@ export default function PlaybooksPage() {
                                     show: { opacity: 1, y: 0 }
                                 }}
                                 whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                                exit={{ opacity: 0, scale: 0.95 }}
+                                exit={{ opacity: 0 }}
                             >
                                 <Card className="card-hover group h-full">
                                     <CardHeader className="pb-3">
@@ -363,18 +363,13 @@ export default function PlaybooksPage() {
                                         {playbook.rules && playbook.rules.length > 0 && (
                                             <div className="space-y-1.5">
                                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Rules</p>
-                                                <ul className="space-y-1">
-                                                    {playbook.rules.slice(0, 3).map((rule, i) => (
+                                                <ul className="space-y-1 max-h-30 overflow-y-auto pr-1 custom-scrollbar">
+                                                    {playbook.rules.map((rule, i) => (
                                                         <li key={i} className="flex items-start gap-2 text-xs">
                                                             <ChevronRight className="h-3 w-3 mt-0.5 text-primary shrink-0" />
                                                             <span className="text-muted-foreground">{rule}</span>
                                                         </li>
                                                     ))}
-                                                    {playbook.rules.length > 3 && (
-                                                        <li className="text-xs text-primary cursor-pointer hover:underline pl-5">
-                                                            +{playbook.rules.length - 3} more rules
-                                                        </li>
-                                                    )}
                                                 </ul>
                                             </div>
                                         )}
@@ -424,7 +419,7 @@ export default function PlaybooksPage() {
 
             {/* ── Edit Dialog ── */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Edit Playbook</DialogTitle>
                         <DialogDescription>

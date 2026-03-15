@@ -49,7 +49,7 @@ groups:
   - name: application
     rules:
       - alert: HighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        expr: sum(rate(api_requests_total{status_code=~"5.."}[5m])) / clamp_min(sum(rate(api_requests_total[5m])), 1) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -58,7 +58,7 @@ groups:
           description: "More than 5% of requests are returning 5xx errors. Current: {{ $value | humanizePercentage }}"
 
       - alert: HighLatencyP95
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        expr: histogram_quantile(0.95, sum(rate(api_request_latency_seconds_bucket[5m])) by (le)) > 2
         for: 10m
         labels:
           severity: warning
@@ -67,7 +67,7 @@ groups:
           description: "P95 response time is above 2 seconds for the last 10 minutes. Current: {{ $value }}s"
 
       - alert: HighLatencyP99
-        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 5
+        expr: histogram_quantile(0.99, sum(rate(api_request_latency_seconds_bucket[5m])) by (le)) > 5
         for: 5m
         labels:
           severity: critical
@@ -76,13 +76,76 @@ groups:
           description: "P99 response time is above 5 seconds. Current: {{ $value }}s"
 
       - alert: HighRequestRate
-        expr: rate(http_requests_total[1m]) > 1000
+        expr: sum(rate(api_requests_total[1m])) > 1000
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Unusually high request rate"
           description: "Request rate exceeds 1000 req/min. Current: {{ $value }} req/s"
+
+      - alert: ReplayFailuresDetected
+        expr: increase(replay_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Replay failures detected"
+          description: "One or more replay runs failed in the last 5 minutes."
+
+      - alert: RedisLatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(redis_roundtrip_seconds_bucket[5m])) by (le)) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis latency is high"
+          description: "P95 Redis roundtrip exceeded 50ms. Current: {{ $value }}s"
+
+      - alert: ApiErrorSpike
+        expr: sum(rate(api_errors_total[5m])) > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API error spike"
+          description: "api_errors_total exceeded 10/s over the last 5 minutes."
+
+      - alert: OrderRejectionSpike
+        expr: increase(orders_rejected_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Order rejection spike"
+          description: "More than 5 orders were rejected in the last 5 minutes."
+
+      - alert: RateLimitViolationsHigh
+        expr: increase(rate_limit_violations_total[5m]) > 20
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limit violations elevated"
+          description: "Rate-limit violations crossed 20 in the last 5 minutes."
+
+      - alert: ReplayDeterminismFailure
+        expr: replay_determinism_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Replay determinism failure"
+          description: "Replay engine produced non-deterministic results"
+
+      - alert: FinancialInvariantViolation
+        expr: financial_invariant_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Financial invariant violation"
+          description: "Financial invariant violation detected"
 
   # ---------------------------------------------------------------------------
   # Kubernetes Alerts

@@ -1,6 +1,7 @@
 import {
   IsNotEmpty,
   IsNumber,
+  Min,
   IsOptional,
   IsString,
   IsUUID,
@@ -33,10 +34,12 @@ export class CreateTradeDto {
 
   @IsNumber()
   @IsNotEmpty()
+  @Min(0.00000001)
   entryPrice: number;
 
   @IsNumber()
   @IsOptional()
+  @Min(0.00000001)
   exitPrice?: number;
 
   @IsNumber()

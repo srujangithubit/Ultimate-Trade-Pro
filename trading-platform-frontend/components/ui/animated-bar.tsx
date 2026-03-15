@@ -1,41 +1,35 @@
-import { motion } from 'framer-motion';
-
-export const AnimatedHorizontalBar = (props: any) => {
-    const { fill, x, y, width, height, index } = props;
-    const safeWidth = Number.isNaN(width) ? 0 : width;
-    const safeHeight = Number.isNaN(height) ? 0 : height;
+export const AnimatedHorizontalBar = (props: Record<string, unknown>) => {
+    const { fill, x, y, width, height } = props;
+    const safeWidth = Math.max(0, Number(width) || 0);
+    const safeHeight = Math.max(0, Number(height) || 0);
 
     return (
-        <motion.rect
-            x={x}
-            y={y}
-            width={0}
+        <rect
+            x={x as number}
+            y={y as number}
+            width={safeWidth}
             height={safeHeight}
-            fill={fill}
+            fill={fill as string}
             rx={4}
-            initial={{ width: 0 }}
-            animate={{ width: safeWidth }}
-            transition={{ duration: 0.6, delay: (index || 0) * 0.05, ease: "easeOut" }}
+            style={{ transition: 'width 0.6s ease-out' }}
         />
     );
 };
 
-export const AnimatedVerticalBar = (props: any) => {
-    const { fill, x, y, width, height, index } = props;
-    const safeWidth = Number.isNaN(width) ? 0 : width;
-    const safeHeight = Number.isNaN(height) ? 0 : height;
+export const AnimatedVerticalBar = (props: Record<string, unknown>) => {
+    const { fill, x, y, width, height } = props;
+    const safeWidth = Math.max(0, Number(width) || 0);
+    const safeHeight = Math.max(0, Number(height) || 0);
 
     return (
-        <motion.rect
-            x={x}
-            y={y}
+        <rect
+            x={x as number}
+            y={y as number}
             width={safeWidth}
-            height={0}
-            fill={fill}
+            height={safeHeight}
+            fill={fill as string}
             rx={4}
-            initial={{ height: 0 }}
-            animate={{ height: safeHeight }}
-            transition={{ duration: 0.6, delay: (index || 0) * 0.05, ease: "easeOut" }}
+            style={{ transition: 'height 0.6s ease-out' }}
         />
     );
 };

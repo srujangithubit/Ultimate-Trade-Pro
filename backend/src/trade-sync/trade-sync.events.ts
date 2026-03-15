@@ -1,0 +1,31 @@
+export const TRADE_SYNC_EVENTS = {
+  SYNC_STATUS_UPDATE: 'sync:status_update',
+  REPLICATION_EVENT: 'sync:replication_event',
+  REPLICATION_RESULT: 'sync:replication_result',
+  SLAVE_STATUS_CHANGE: 'sync:slave_status_change',
+  MASTER_TICK: 'sync:master_tick',
+  MASTER_TRADE: 'sync:master_trade',
+  MASTER_HEARTBEAT: 'sync:master_heartbeat',
+  SLAVE_HEARTBEAT: 'sync:slave_heartbeat',
+  KILL_SWITCH_TRIGGERED: 'sync:kill_switch_triggered',
+  DRAWDOWN_ALERT: 'sync:drawdown_alert',
+  SLAVE_EQUITY_UPDATE: 'sync:slave_equity_update',
+  MASTER_EQUITY_UPDATE: 'sync:master_equity_update',
+  CONNECTION_STATUS: 'sync:connection_status',
+  REPLICATION_LATENCY: 'sync:replication_latency',
+  TRADE_EXECUTED: 'sync:trade_executed',
+  EXECUTION_CONFIRM: 'sync:execution_confirm',
+  POSITIONS_UPDATE: 'sync:positions_update',
+  SUBSCRIBE_GROUP: 'sync:subscribe_group',
+  UNSUBSCRIBE_GROUP: 'sync:unsubscribe_group',
+  PAUSE_SLAVE: 'sync:pause_slave',
+  RESUME_SLAVE: 'sync:resume_slave',
+  TRIGGER_KILL_SWITCH: 'sync:trigger_kill_switch',
+  RESET_KILL_SWITCH: 'sync:reset_kill_switch',
+  INITIAL_STATE: 'sync:initial_state',
+  PING: 'sync:ping',
+  PONG: 'sync:pong',
+} as const;
+
+export type TradeSyncEventKey = keyof typeof TRADE_SYNC_EVENTS;
+export type TradeSyncEventValue = (typeof TRADE_SYNC_EVENTS)[TradeSyncEventKey];

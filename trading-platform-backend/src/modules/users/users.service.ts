@@ -9,25 +9,14 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-  ) {}
+  ) { }
 
   async create(userData: Partial<User> & { password?: string }) {
     const user = this.userRepository.create(userData);
 
-    // If password is provided but hash is not, hash it (though AuthService usually handles this)
-    // Here we assume userData already contains passwordHash if it was processed by AuthService
-    // If we receive raw password from elsewhere, handle it.
-    // The prompt shows AuthService hashing it, so we expect passwordHash.
-
-    // However, the prompt for AuthService says:
-    // ...registerDto, password: hashedPassword
-    // registerDto has 'password' field.
-    // We should map 'password' to 'passwordHash' in entity if needed, or rely on caller?
-
-    // Let's ensure proper mapping:
+    // Map 'password' to 'passwordHash' if provided
     if (userData.password && !userData.passwordHash) {
-      // Ideally this should be handled by caller, but for safety:
-      user.passwordHash = userData.password; // Assuming it WAS hashed and passed as password property
+      user.passwordHash = userData.password;
     }
 
     try {
@@ -48,19 +37,7 @@ export class UsersService {
     return await this.userRepository.findOne({ where: { id } });
   }
 
-  async updateRefreshToken(userId: string, refreshToken: string | null) {
-    let hash: string | null = null;
-    if (refreshToken) {
-      hash = await bcrypt.hash(refreshToken, 10);
-    }
-    await this.userRepository.update(userId, {
-      refreshTokenHash: hash as any,
-    });
-  }
-
-  async updateLastLogin(userId: string) {
-    await this.userRepository.update(userId, {
-      lastLogin: new Date(),
-    });
+  async updateDisplayName(userId: string, displayName: string) {
+    await this.userRepository.update(userId, { displayName });
   }
 }

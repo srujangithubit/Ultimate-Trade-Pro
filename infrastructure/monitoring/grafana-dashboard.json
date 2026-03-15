@@ -20,11 +20,11 @@
             },
             "targets": [
                 {
-                    "expr": "sum(rate(http_requests_total[5m]))",
+                    "expr": "sum(rate(api_requests_total[5m]))",
                     "legendFormat": "Total"
                 },
                 {
-                    "expr": "sum(rate(http_requests_total[5m])) by (method)",
+                    "expr": "sum(rate(api_requests_total[5m])) by (method)",
                     "legendFormat": "{{ method }}"
                 }
             ],
@@ -52,11 +52,11 @@
             },
             "targets": [
                 {
-                    "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+                    "expr": "sum(rate(api_requests_total{status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(api_requests_total[5m])), 1) * 100",
                     "legendFormat": "5xx Error Rate"
                 },
                 {
-                    "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+                    "expr": "sum(rate(api_requests_total{status_code=~\"4..\"}[5m])) / clamp_min(sum(rate(api_requests_total[5m])), 1) * 100",
                     "legendFormat": "4xx Error Rate"
                 }
             ],
@@ -101,15 +101,15 @@
             },
             "targets": [
                 {
-                    "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+                    "expr": "histogram_quantile(0.95, sum(rate(api_request_latency_seconds_bucket[5m])) by (le))",
                     "legendFormat": "P95"
                 },
                 {
-                    "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+                    "expr": "histogram_quantile(0.99, sum(rate(api_request_latency_seconds_bucket[5m])) by (le))",
                     "legendFormat": "P99"
                 },
                 {
-                    "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+                    "expr": "histogram_quantile(0.50, sum(rate(api_request_latency_seconds_bucket[5m])) by (le))",
                     "legendFormat": "P50 (Median)"
                 }
             ],
@@ -137,7 +137,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(http_active_connections)",
+                    "expr": "sum(redis_health_up + database_health_up)",
                     "legendFormat": "Active Connections"
                 }
             ],
@@ -165,7 +165,7 @@
             },
             "targets": [
                 {
-                    "expr": "rate(container_cpu_usage_seconds_total{container=\"api\"}[5m]) * 100",
+                    "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
                     "legendFormat": "{{ pod }}"
                 }
             ],
@@ -193,7 +193,7 @@
             },
             "targets": [
                 {
-                    "expr": "container_memory_usage_bytes{container=\"api\"}",
+                    "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
                     "legendFormat": "{{ pod }}"
                 }
             ],
@@ -279,6 +279,298 @@
                                 "value": 3
                             }
                         ]
+                    }
+                }
+            }
+        },
+        {
+            "title": "Replay Determinism Status",
+            "type": "stat",
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 32
+            },
+            "targets": [
+                {
+                    "expr": "replay_determinism_status",
+                    "legendFormat": "Determinism"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "PASS"
+                                },
+                                "0": {
+                                    "text": "FAIL"
+                                }
+                            }
+                        }
+                    ],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "green",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "color": {
+                        "mode": "thresholds"
+                    }
+                }
+            }
+        },
+        {
+            "title": "Replay Determinism Failures Total",
+            "type": "stat",
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 32
+            },
+            "targets": [
+                {
+                    "expr": "replay_determinism_failures_total",
+                    "legendFormat": "Failures"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 1
+                            },
+                            {
+                                "color": "red",
+                                "value": 2
+                            }
+                        ]
+                    },
+                    "color": {
+                        "mode": "thresholds"
+                    }
+                }
+            }
+        },
+        {
+            "title": "Seconds Since Last Determinism Check",
+            "type": "stat",
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 32
+            },
+            "targets": [
+                {
+                    "expr": "time() - replay_determinism_last_check_timestamp_seconds",
+                    "legendFormat": "Age"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 7200
+                            },
+                            {
+                                "color": "red",
+                                "value": 21600
+                            }
+                        ]
+                    },
+                    "color": {
+                        "mode": "thresholds"
+                    }
+                }
+            }
+        },
+        {
+            "title": "Replay Determinism Failure Trend (24h)",
+            "type": "timeseries",
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 40
+            },
+            "targets": [
+                {
+                    "expr": "increase(replay_determinism_failures_total[24h])",
+                    "legendFormat": "Failures (24h increase)"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 20,
+                        "lineWidth": 2
+                    },
+                    "unit": "none"
+                }
+            }
+        },
+        {
+            "title": "Financial Invariant Status",
+            "type": "stat",
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 48
+            },
+            "targets": [
+                {
+                    "expr": "financial_invariant_status",
+                    "legendFormat": "Invariant Status"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "1": {
+                                    "text": "HEALTHY"
+                                },
+                                "0": {
+                                    "text": "VIOLATION"
+                                }
+                            }
+                        }
+                    ],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "green",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "color": {
+                        "mode": "thresholds"
+                    }
+                }
+            }
+        },
+        {
+            "title": "Financial Invariant Failures Total",
+            "type": "stat",
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 48
+            },
+            "targets": [
+                {
+                    "expr": "financial_invariant_failures_total",
+                    "legendFormat": "Invariant Failures"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 1
+                            },
+                            {
+                                "color": "red",
+                                "value": 2
+                            }
+                        ]
+                    },
+                    "color": {
+                        "mode": "thresholds"
+                    }
+                }
+            }
+        },
+        {
+            "title": "Financial Invariant Last Check Age (s)",
+            "type": "stat",
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 48
+            },
+            "targets": [
+                {
+                    "expr": "time() - financial_invariant_last_check_timestamp_seconds",
+                    "legendFormat": "Check Age"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 1200
+                            },
+                            {
+                                "color": "red",
+                                "value": 3600
+                            }
+                        ]
+                    },
+                    "color": {
+                        "mode": "thresholds"
                     }
                 }
             }

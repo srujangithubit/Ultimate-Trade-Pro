@@ -58,6 +58,23 @@ export class BacktestingService {
     return session;
   }
 
+  async getSessionCandles(sessionId: string, userId: string, limit: number) {
+    const session = await this.getSession(sessionId, userId);
+
+    const to = session.startDate;
+    // Approximate `from` date based on the limit. Using a large enough buffer (e.g., limit * days).
+    const from = new Date(to.getTime() - Math.max(limit, 500) * 24 * 60 * 60 * 1000);
+
+    const data = await this.marketDataService.getHistoricalData(
+      session.instrument,
+      from,
+      to,
+      session.timeframe as any,
+    );
+
+    return data.slice(-limit);
+  }
+
   async getUserSessions(userId: string) {
     const sessions = await this.sessionRepository.find({
       where: { userId },

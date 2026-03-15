@@ -35,12 +35,12 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
         const socket = io(baseUrl, {
             withCredentials: true,
             transports: ['websocket'],
+            autoConnect: false,
         });
 
         socketRef.current = socket;
 
         socket.on('connect', () => {
-            console.log('WS Connected');
             setIsConnected(true);
             setError(null);
 
@@ -52,40 +52,40 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
         });
 
         socket.on('connect_error', (err) => {
-            console.error('WS Connection Error:', err);
             setError(err.message);
             setIsConnected(false);
         });
 
         socket.on('disconnect', () => {
-            console.log('WS Disconnected');
             setIsConnected(false);
         });
 
         // Handle updates
-        socket.on('backtest:update', (payload: any) => {
+        socket.on('backtest:update', (payload: Record<string, unknown>) => {
             if (payload.sessionId === sessionId) {
                 setData({
-                    currentPrice: payload.currentPrice,
-                    timestamp: payload.timestamp,
-                    balance: payload.balance,
-                    pnl: payload.pnl,
-                    volume: payload.volume,
+                    currentPrice: payload.currentPrice as number,
+                    timestamp: payload.timestamp as string,
+                    balance: payload.balance as number,
+                    pnl: payload.pnl as number,
+                    volume: payload.volume as number,
                 });
             }
         });
 
-        socket.on('backtest:position-opened', (payload: any) => {
-            console.log('Position opened:', payload);
-            // Optionally refresh data or show toast
+        socket.on('backtest:position-opened', () => {
+            // Position opened — UI can refresh if needed
         });
 
-        socket.on('backtest:trade-completed', (payload: any) => {
-            console.log('Trade completed:', payload);
+        socket.on('backtest:trade-completed', () => {
+            // Trade completed — UI can refresh if needed
         });
+
+        socket.connect();
 
         return () => {
             socket.emit('unsubscribe:backtest', { sessionId });
+            socket.removeAllListeners();
             socket.disconnect();
             socketRef.current = null;
         };

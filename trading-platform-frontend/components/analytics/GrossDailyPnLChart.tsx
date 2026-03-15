@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     BarChart,
@@ -8,9 +9,9 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer,
     Cell
 } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import { formatCurrency, formatDate } from '@/lib/utils/formatters';
 import { AnimatedVerticalBar } from '@/components/ui/animated-bar';
 import { Info } from 'lucide-react';
@@ -27,7 +28,7 @@ interface GrossDailyPnLChartProps {
     data: DailyStats[];
 }
 
-export default function GrossDailyPnLChart({ data }: GrossDailyPnLChartProps) {
+function GrossDailyPnLChart({ data }: GrossDailyPnLChartProps) {
     return (
         <Card className="col-span-1">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -49,8 +50,8 @@ export default function GrossDailyPnLChart({ data }: GrossDailyPnLChartProps) {
                 </div>
             </CardHeader>
             <CardContent>
-                <div className="h-[300px] w-full mt-4">
-                    <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+                <div className="h-75 w-full mt-4" style={{ minWidth: 0 }}>
+                    <ResponsiveContainer width="100%" height="100%" minHeight={300} debounce={50}>
                         <BarChart data={data}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--muted)" strokeOpacity={0.1} />
                             <XAxis
@@ -125,3 +126,4 @@ export default function GrossDailyPnLChart({ data }: GrossDailyPnLChartProps) {
         </Card>
     );
 }
+export default memo(GrossDailyPnLChart);

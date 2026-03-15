@@ -10,6 +10,9 @@ import { useMT5WebSocket } from '@/lib/hooks/useMT5WebSocket';
 import { useMT5TradeNotifications } from '@/lib/hooks/useMT5TradeNotifications';
 import { mt5Api } from '@/lib/api/mt5';
 
+type OrderParams = Parameters<typeof mt5Api.placeOrder>[0];
+type OrderResult = Awaited<ReturnType<typeof mt5Api.placeOrder>>;
+
 const MT5Context = createContext<MT5ContextValue | null>(null);
 
 export function MT5Provider({ children }: { children: React.ReactNode }) {
@@ -24,6 +27,8 @@ export function MT5Provider({ children }: { children: React.ReactNode }) {
     refreshAccount,
     refreshPositions,
     refreshTradeHistory,
+    onTick,
+    offTick,
   } = useMT5WebSocket();
 
   // Fire toast notifications when positions open / close
@@ -69,6 +74,28 @@ export function MT5Provider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const placeOrder = useCallback(async (params: OrderParams): Promise<OrderResult> => {
+    const result = await mt5Api.placeOrder(params);
+    // Refresh positions and account after order
+    refreshPositions();
+    refreshAccount();
+    return result;
+  }, [refreshPositions, refreshAccount]);
+
+  const closePosition = useCallback(async (ticket: number, volume?: number): Promise<OrderResult> => {
+    const result = await mt5Api.closePosition(ticket, volume);
+    refreshPositions();
+    refreshAccount();
+    refreshTradeHistory(30);
+    return result;
+  }, [refreshPositions, refreshAccount, refreshTradeHistory]);
+
+  const modifyPosition = useCallback(async (ticket: number, sl?: number, tp?: number): Promise<OrderResult> => {
+    const result = await mt5Api.modifyPosition(ticket, sl, tp);
+    refreshPositions();
+    return result;
+  }, [refreshPositions]);
+
   const value: MT5ContextValue = {
     status,
     account,
@@ -84,6 +111,11 @@ export function MT5Provider({ children }: { children: React.ReactNode }) {
     refreshAccount,
     refreshPositions,
     refreshTradeHistory,
+    placeOrder,
+    closePosition,
+    modifyPosition,
+    onTick,
+    offTick,
   };
 
   return <MT5Context.Provider value={value}>{children}</MT5Context.Provider>;

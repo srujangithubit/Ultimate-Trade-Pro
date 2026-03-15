@@ -15,6 +15,63 @@ import type {
   MT5TradePosition,
 } from '@/lib/types/mt5';
 
+type TickCallback = (tick: MT5TickData) => void;
+
+function isSamePositions(a: MT5TradePosition[], b: MT5TradePosition[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+
+  for (let i = 0; i < a.length; i += 1) {
+    const left = a[i];
+    const right = b[i];
+    if (
+      left.ticket !== right.ticket ||
+      left.symbol !== right.symbol ||
+      left.type_str !== right.type_str ||
+      left.volume !== right.volume ||
+      left.price_open !== right.price_open ||
+      left.price_current !== right.price_current ||
+      left.profit !== right.profit ||
+      left.swap !== right.swap ||
+      left.sl !== right.sl ||
+      left.tp !== right.tp ||
+      left.time !== right.time
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isSameTradeHistory(a: MT5ClosedTrade[], b: MT5ClosedTrade[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+
+  for (let i = 0; i < a.length; i += 1) {
+    const left = a[i];
+    const right = b[i];
+    if (
+      left.ticket_out !== right.ticket_out ||
+      left.ticket_in !== right.ticket_in ||
+      left.symbol !== right.symbol ||
+      left.type !== right.type ||
+      left.volume !== right.volume ||
+      left.entry_price !== right.entry_price ||
+      left.exit_price !== right.exit_price ||
+      left.profit !== right.profit ||
+      left.swap !== right.swap ||
+      left.commission !== right.commission ||
+      left.entry_time !== right.entry_time ||
+      left.exit_time !== right.exit_time
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 const MT5_WS_URL =
   process.env.NEXT_PUBLIC_MT5_WS_URL ||
   (typeof window !== 'undefined'
@@ -60,38 +117,111 @@ export function useMT5WebSocket() {
   const [lastHeartbeat, setLastHeartbeat] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
 
-  const handleMessageRef = useRef<(msg: MT5WebSocketMessage) => void>(() => {});
+  // Callback-based tick listeners: symbol -> Set<callback>
+  // These fire synchronously on every tick, bypassing React batching
+  const tickListenersRef = useRef<Map<string, Set<TickCallback>>>(new Map());
+
+  const handleMessageRef = useRef<(msg: MT5WebSocketMessage) => void>(() => { });
 
   // Keep the handler ref up to date (must be in useEffect for React 19 compiler)
   useEffect(() => {
     handleMessageRef.current = (msg: MT5WebSocketMessage) => {
       switch (msg.type) {
         case 'status':
-          setStatus({
-            connected: msg.connected ?? false,
-            authenticated: msg.authenticated ?? false,
+          setStatus((prev) => {
+            const nextConnected = msg.connected ?? false;
+            const nextAuthenticated = msg.authenticated ?? false;
+            if (
+              prev.connected === nextConnected &&
+              prev.authenticated === nextAuthenticated
+            ) {
+              return prev;
+            }
+            return {
+              connected: nextConnected,
+              authenticated: nextAuthenticated,
+            };
           });
           break;
         case 'auth':
-          setStatus((s) => ({ ...s, authenticated: msg.data as boolean }));
+          setStatus((s) => {
+            const authenticated = msg.data as boolean;
+            if (s.authenticated === authenticated) return s;
+            return { ...s, authenticated };
+          });
           break;
         case 'tick':
           if (msg.data && typeof msg.data === 'object') {
-            const tick = msg.data as MT5TickData;
-            setTicks((prev) => ({ ...prev, [tick.symbol]: tick }));
+            // Gateway sends { symbol, data: { bid, ask, last, volume, time } }
+            // Flatten into MT5TickData shape
+            const raw = msg.data as { symbol?: string; data?: Record<string, unknown> } & MT5TickData;
+            const tick: MT5TickData = raw.data && typeof raw.data === 'object'
+              ? { symbol: raw.symbol ?? '', ...raw.data } as MT5TickData
+              : raw;
+            if (tick.symbol) {
+              setTicks((prev) => {
+                const existing = prev[tick.symbol];
+                if (
+                  existing &&
+                  existing.bid === tick.bid &&
+                  existing.ask === tick.ask &&
+                  existing.last === tick.last &&
+                  existing.volume === tick.volume &&
+                  existing.time === tick.time
+                ) {
+                  return prev;
+                }
+                return { ...prev, [tick.symbol]: tick };
+              });
+              // Fire callback listeners synchronously (bypasses React batching)
+              const listeners = tickListenersRef.current.get(tick.symbol);
+              if (listeners) {
+                for (const cb of listeners) {
+                  try { cb(tick); } catch { /* ignore listener errors */ }
+                }
+              }
+            }
           }
           break;
         case 'account_info':
-          setAccount(msg.data as MT5AccountInfo);
+          setAccount((prev) => {
+            const raw = msg.data;
+            if (!raw || typeof raw !== 'object') {
+              return prev === null ? prev : null;
+            }
+
+            const next = raw as MT5AccountInfo;
+            if (
+              prev &&
+              prev.login === next.login &&
+              prev.server === next.server &&
+              prev.balance === next.balance &&
+              prev.equity === next.equity &&
+              prev.margin === next.margin &&
+              prev.free_margin === next.free_margin
+            ) {
+              return prev;
+            }
+            return next;
+          });
           break;
         case 'positions':
-          setPositions(msg.data as MT5TradePosition[]);
+          setPositions((prev) => {
+            const next = msg.data as MT5TradePosition[];
+            return isSamePositions(prev, next) ? prev : next;
+          });
           break;
         case 'trade_history':
-          setTradeHistory(msg.data as MT5ClosedTrade[]);
+          setTradeHistory((prev) => {
+            const next = msg.data as MT5ClosedTrade[];
+            return isSameTradeHistory(prev, next) ? prev : next;
+          });
           break;
         case 'heartbeat':
-          setLastHeartbeat(msg.data as string);
+          setLastHeartbeat((prev) => {
+            const next = msg.data as string;
+            return prev === next ? prev : next;
+          });
           break;
         case 'error':
         case 'mt5_error':
@@ -99,9 +229,9 @@ export function useMT5WebSocket() {
           break;
       }
     };
-  });
+  }, []);
 
-  const connectWsRef = useRef<() => void>(() => {});
+  const connectWsRef = useRef<() => void>(() => { });
   const hasConnectedRef = useRef(false);
 
   const connectWs = useCallback(() => {
@@ -160,7 +290,7 @@ export function useMT5WebSocket() {
 
   useEffect(() => {
     connectWsRef.current = connectWs;
-  });
+  }, [connectWs]);
 
   const send = useCallback((data: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -201,10 +331,26 @@ export function useMT5WebSocket() {
     }
   }, []);
 
+  // Register a callback for every tick on a specific symbol
+  const onTick = useCallback((symbol: string, callback: TickCallback) => {
+    const map = tickListenersRef.current;
+    if (!map.has(symbol)) map.set(symbol, new Set());
+    map.get(symbol)!.add(callback);
+  }, []);
+
+  // Unregister a tick callback
+  const offTick = useCallback((symbol: string, callback: TickCallback) => {
+    tickListenersRef.current.get(symbol)?.delete(callback);
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
-    connectWs();
+    // Defer connection to survive React Strict Mode double-invoke.
+    // The first cleanup clears the timer before any WebSocket is created,
+    // preventing "closed before established" warnings.
+    const timer = setTimeout(() => connectWs(), 0);
     return () => {
+      clearTimeout(timer);
       mountedRef.current = false;
       clearTimeout(reconnectTimerRef.current);
       if (wsRef.current) {
@@ -229,5 +375,7 @@ export function useMT5WebSocket() {
     refreshTradeHistory,
     disconnectWs,
     send,
+    onTick,
+    offTick,
   };
 }

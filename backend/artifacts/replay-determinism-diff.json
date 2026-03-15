@@ -1,0 +1,27 @@
+{
+  "checked_at": "2026-03-15T06:52:10.937Z",
+  "source": "db:EURUSD:1",
+  "candles": 50000,
+  "dataset_hash": {
+    "run1": "b2f533a3f57c53ab45617b3a239d4360a9ca641ebd3675841be157c05015f5cb",
+    "run2": "b2f533a3f57c53ab45617b3a239d4360a9ca641ebd3675841be157c05015f5cb",
+    "mismatch": false
+  },
+  "run1_pnl": 9900.000000000011,
+  "run2_pnl": 9900.000000000011,
+  "pnl_delta": 0,
+  "first_divergence_index": 0,
+  "trade_order_mismatch": true,
+  "pnl_divergence_index": null,
+  "run1_trade": {
+    "type": "sl",
+    "triggerPrice": 1.1622400000000002,
+    "candleTime": 1768183320
+  },
+  "run2_trade": {
+    "type": "sl",
+    "triggerPrice": 1.1622500000000002,
+    "candleTime": 1768183320
+  },
+  "pnl_divergence_point": null
+}

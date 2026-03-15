@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils/formatters';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 
 interface AnalysisStats {
     totalTrades: number;
@@ -34,10 +35,10 @@ const StatRow = ({ label, value, isCurrency = false, isDuration = false }: { lab
     let formattedValue = safeValue.toString();
 
     if (isCurrency) {
-        formattedValue = formatCurrency(value);
+        formattedValue = formatCurrency(safeValue);
     } else if (isDuration) {
         // Convert minutes to readable format (e.g. 1h 49m 6s)
-        const totalSeconds = Math.round(value * 60);
+        const totalSeconds = Math.round((value || 0) * 60);
         const h = Math.floor(totalSeconds / 3600);
         const m = Math.floor((totalSeconds % 3600) / 60);
         const s = totalSeconds % 60;
@@ -60,7 +61,7 @@ const StatRow = ({ label, value, isCurrency = false, isDuration = false }: { lab
     );
 };
 
-export default function LongShortAnalysis({ data }: LongShortAnalysisProps) {
+function LongShortAnalysis({ data }: LongShortAnalysisProps) {
     const [filter, setFilter] = useState<'all' | 'long' | 'short'>('all');
 
     // Safety check - use 'all' if specific data missing
@@ -117,7 +118,7 @@ export default function LongShortAnalysis({ data }: LongShortAnalysisProps) {
                             <span className="text-muted-foreground text-sm">Total Trades</span>
                             <span className="text-3xl font-bold">{stats.totalTrades}</span>
                         </div>
-                        <div className="h-[250px] w-full">
+                        <div className="h-62.5 w-full">
                             <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                                 <PieChart>
                                     <Pie
@@ -166,3 +167,5 @@ export default function LongShortAnalysis({ data }: LongShortAnalysisProps) {
         </Card>
     );
 }
+
+export default memo(LongShortAnalysis);

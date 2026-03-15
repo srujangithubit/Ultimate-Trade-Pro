@@ -49,6 +49,7 @@ import MT5AccountSummary from './MT5AccountSummary';
 import MT5LiveTrades from './MT5LiveTrades';
 import MT5TradeHistory from './MT5TradeHistory';
 import MT5Analytics from './MT5Analytics';
+import PriceAlertManager from './PriceAlertManager';
 import {
   useMT5Accounts,
   type SavedMT5Account,
@@ -430,8 +431,8 @@ function MT5DashboardContent({ activeTab = 'trading' }: { activeTab?: 'trading' 
           <div className="flex items-center gap-2">
             {status.authenticated && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
               >
                 <Button
@@ -451,9 +452,9 @@ function MT5DashboardContent({ activeTab = 'trading' }: { activeTab?: 'trading' 
         <AnimatePresence>
           {!status.authenticated && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
             >
               <Card className="border-dashed border-2 relative overflow-hidden">
@@ -544,6 +545,13 @@ function MT5DashboardContent({ activeTab = 'trading' }: { activeTab?: 'trading' 
                 transition={{ delay: 0.25 }}
               >
                 <MT5TradeHistory />
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+              >
+                <PriceAlertManager />
               </motion.div>
             </motion.div>
           )}

@@ -5,9 +5,11 @@
 const WebSocket = require("ws");
 
 class MT5WsForwarder {
-  constructor(gateway, options = {}) {
+  constructor(gateway, alertService, options = {}) {
     this.gateway = gateway;
+    this.alertService = alertService;
     this.port = options.port || 8080;
+    this.internalApiKey = options.internalApiKey || '';
     this.wss = null;
     this.clients = new Set();
   }
@@ -18,7 +20,18 @@ class MT5WsForwarder {
   start(server) {
     this.wss = new WebSocket.Server({ server, path: "/ws/mt5" });
 
-    this.wss.on("connection", (ws) => {
+    this.wss.on("connection", (ws, req) => {
+      const url = new URL(req.url || '/', 'ws://localhost');
+      const token = url.searchParams.get('token') || '';
+      const authHeader = req.headers?.authorization || '';
+      const auth = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      const provided = token || auth;
+
+      if (!this.internalApiKey || provided !== this.internalApiKey) {
+        ws.close(1008, 'Unauthorized');
+        return;
+      }
+
       this.clients.add(ws);
       console.log(`[MT5WsForwarder] Client connected (${this.clients.size} total)`);
 
@@ -49,6 +62,13 @@ class MT5WsForwarder {
     // Forward gateway events to all connected frontend clients
     this._setupForwarding();
 
+    // Forward alert triggers to all frontend clients
+    if (this.alertService) {
+      this.alertService.on("alert_triggered", (data) => {
+        this._broadcast(JSON.stringify({ type: "alert_triggered", data }));
+      });
+    }
+
     console.log("[MT5WsForwarder] WebSocket forwarder started on /ws/mt5");
   }
 
@@ -71,6 +91,26 @@ class MT5WsForwarder {
         break;
       case "trade_history":
         this.gateway.requestTradeHistory(msg.days || 30);
+        break;
+      case "create_alert":
+        try {
+          const alert = this.alertService.create({
+            symbol: msg.symbol,
+            targetPrice: msg.targetPrice,
+            direction: msg.direction,
+            note: msg.note,
+          });
+          ws.send(JSON.stringify({ type: "alert_created", data: alert }));
+        } catch (err) {
+          ws.send(JSON.stringify({ type: "error", message: err.message }));
+        }
+        break;
+      case "delete_alert":
+        this.alertService.delete(msg.id);
+        ws.send(JSON.stringify({ type: "alert_deleted", data: { id: msg.id } }));
+        break;
+      case "list_alerts":
+        ws.send(JSON.stringify({ type: "alerts_list", data: this.alertService.list(msg.symbol) }));
         break;
       default:
         ws.send(JSON.stringify({ type: "error", message: `Unknown action: ${msg.action}` }));

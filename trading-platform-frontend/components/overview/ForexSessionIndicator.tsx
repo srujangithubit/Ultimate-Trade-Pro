@@ -67,12 +67,46 @@ function pad(n: number): string {
     return n.toString().padStart(2, '0');
 }
 
-export default function ForexSessionIndicator() {
+function ClockInfo() {
     const [now, setNow] = useState(new Date());
 
     useEffect(() => {
         const interval = setInterval(() => setNow(new Date()), 1000);
         return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <div>
+            <div className="text-2xl sm:text-[28px] font-bold tracking-tight text-foreground flex items-baseline gap-2">
+                {formatTime(now)} <span className="text-sm font-semibold text-muted-foreground uppercase">UTC</span>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1 font-medium">
+                {formatLocalDate(now)}, {formatLocalTime(now)}
+            </div>
+        </div>
+    );
+}
+
+export default function ForexSessionIndicator() {
+    const [now, setNow] = useState(new Date());
+
+    // Only update the heavy UI (map, timeline) once every minute on the minute mark
+    useEffect(() => {
+        let timeout: NodeJS.Timeout;
+        let interval: NodeJS.Timeout;
+
+        const sync = () => {
+            setNow(new Date());
+            interval = setInterval(() => setNow(new Date()), 60000);
+        };
+
+        const msUntilNextMinute = 60000 - (new Date().getSeconds() * 1000 + new Date().getMilliseconds());
+        timeout = setTimeout(sync, msUntilNextMinute);
+
+        return () => {
+            clearTimeout(timeout);
+            clearInterval(interval);
+        };
     }, []);
 
     const currentHour = now.getUTCHours();
@@ -88,14 +122,7 @@ export default function ForexSessionIndicator() {
             <CardContent className="p-4 sm:p-6 pb-8">
                 {/* Header row: UTC Clock + Active sessions */}
                 <div className="flex items-start justify-between mb-5">
-                    <div>
-                        <div className="text-2xl sm:text-[28px] font-bold tracking-tight text-foreground flex items-baseline gap-2">
-                            {formatTime(now)} <span className="text-sm font-semibold text-muted-foreground uppercase">UTC</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1 font-medium">
-                            {formatLocalDate(now)}, {formatLocalTime(now)}
-                        </div>
-                    </div>
+                    <ClockInfo />
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-foreground hidden sm:inline">Active:</span>
                         {activeSessions.length > 0 ? (
@@ -134,7 +161,7 @@ export default function ForexSessionIndicator() {
                                 return (
                                     <div
                                         key={s.name}
-                                        className="absolute top-0 h-full transition-all duration-500 rounded-full"
+                                        className="absolute top-0 h-full rounded-full"
                                         style={{
                                             left: `${left}%`,
                                             width: `${width}%`,
@@ -150,7 +177,7 @@ export default function ForexSessionIndicator() {
                                 return (
                                     <div key={s.name}>
                                         <div
-                                            className="absolute top-0 h-full transition-all duration-500 rounded-l-full"
+                                            className="absolute top-0 h-full rounded-l-full"
                                             style={{
                                                 left: `${leftA}%`,
                                                 width: `${widthA}%`,
@@ -159,7 +186,7 @@ export default function ForexSessionIndicator() {
                                             }}
                                         />
                                         <div
-                                            className="absolute top-0 h-full transition-all duration-500 rounded-r-full"
+                                            className="absolute top-0 h-full rounded-r-full"
                                             style={{
                                                 left: '0%',
                                                 width: `${widthB}%`,
@@ -174,7 +201,7 @@ export default function ForexSessionIndicator() {
 
                         {/* Current time marker */}
                         <div
-                            className="absolute top-1/2 -z-0 h-4 w-0.5 bg-slate-800 dark:bg-slate-200 transition-all duration-1000 -translate-y-1/2"
+                            className="absolute top-1/2 -z-0 h-4 w-0.5 bg-slate-800 dark:bg-slate-200 -translate-y-1/2"
                             style={{ left: `${timeProgress}%` }}
                         />
                     </div>
@@ -183,18 +210,14 @@ export default function ForexSessionIndicator() {
                 {/* World Map Area */}
                 <div className="relative w-full mt-8" style={{ aspectRatio: '2.2 / 1' }}>
 
-                    {/* Map Background layer using CSS Mask to apply perfect flat color */}
+                    {/* Map Background layer using standard background-image */}
                     <div
-                        className="absolute inset-0 bg-[#4A5568] dark:bg-slate-600"
+                        className="absolute inset-0 opacity-20 dark:opacity-40"
                         style={{
-                            maskImage: "url('/world-map.svg')",
-                            WebkitMaskImage: "url('/world-map.svg')",
-                            maskSize: '100% 100%',
-                            WebkitMaskSize: '100% 100%',
-                            maskRepeat: 'no-repeat',
-                            WebkitMaskRepeat: 'no-repeat',
-                            maskPosition: 'center',
-                            WebkitMaskPosition: 'center',
+                            backgroundImage: "url('/world-map.svg')",
+                            backgroundSize: '100% 100%',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'center',
                         }}
                     />
 
@@ -218,19 +241,6 @@ export default function ForexSessionIndicator() {
                                         <div
                                             className="absolute inset-0 rounded-full animate-ping opacity-60"
                                             style={{ backgroundColor: session.color }}
-                                        />
-                                    )}
-                                    {/* Outer colored ring if active */}
-                                    {isActive && (
-                                        <div
-                                            className="absolute inset-0 rounded-full scale-125 opacity-30"
-                                            style={{ backgroundColor: session.color }}
-                                        />
-                                    )}
-                                    {isActive && (
-                                        <div
-                                            className="absolute inset-0 rounded-full scale-110 opacity-60"
-                                            style={{ backgroundColor: session.color, filter: 'blur(2px)' }}
                                         />
                                     )}
 

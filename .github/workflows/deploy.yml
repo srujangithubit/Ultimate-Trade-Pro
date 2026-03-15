@@ -4,8 +4,9 @@
 name: Deploy to Production
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:  # Manual trigger only — no K8s cluster configured yet
+  # push:
+  #   branches: [main]
 
 concurrency:
   group: deploy-production

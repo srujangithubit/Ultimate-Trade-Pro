@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BacktestingService } from './backtesting.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { CandleLoaderService } from './replay/candle-loader.service';
+import { REDIS_CLIENT } from '../trade-sync/redis.provider';
 
 describe('BacktestingService', () => {
   let service: BacktestingService;
@@ -20,6 +22,22 @@ describe('BacktestingService', () => {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    marketDataCandle: {
+      findMany: jest.fn(),
+    },
+    $queryRaw: jest.fn(),
+  };
+
+  const mockCandleLoader = {
+    loadForSession: jest.fn(),
+    evictSession: jest.fn(),
+  };
+
+  const mockRedis = {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+    disconnect: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -27,6 +45,8 @@ describe('BacktestingService', () => {
       providers: [
         BacktestingService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: CandleLoaderService, useValue: mockCandleLoader },
+        { provide: REDIS_CLIENT, useValue: mockRedis },
       ],
     }).compile();
 
@@ -82,6 +102,8 @@ describe('BacktestingService', () => {
           configuration: {
             instrument: dto.instrument,
             assetClass: dto.assetClass,
+            timeframe: '1h',
+            timezone: 'UTC',
             startingBalance: dto.startingBalance,
             startDate: dto.startDate,
             endDate: dto.endDate,
@@ -146,6 +168,7 @@ describe('BacktestingService', () => {
       expect(mockPrisma.backtestingSession.findMany).toHaveBeenCalledWith({
         where: { userId: 'user-1' },
         orderBy: { createdAt: 'desc' },
+        include: { trades: true },
       });
     });
   });
@@ -203,6 +226,27 @@ describe('BacktestingService', () => {
           quantity: 10,
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject non-positive entry prices', async () => {
+      mockPrisma.backtestingSession.findUnique.mockResolvedValue({
+        id: 'session-1',
+        userId: 'user-1',
+        status: 'active',
+        accountId: null,
+        configuration: { instrument: 'AAPL' },
+        trades: [],
+        snapshots: [],
+      });
+
+      await expect(
+        service.executeOrder('user-1', 'session-1', {
+          orderType: 'market',
+          direction: 'long',
+          quantity: 10,
+          price: 0,
+        }),
+      ).rejects.toThrow(new BadRequestException('Invalid entry price'));
     });
   });
 
@@ -286,6 +330,81 @@ describe('BacktestingService', () => {
       await expect(
         service.closeTrade('user-1', 'session-1', 'trade-1', 110),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject non-positive exit prices', async () => {
+      mockPrisma.backtestingSession.findUnique.mockResolvedValue({
+        id: 'session-1',
+        userId: 'user-1',
+        status: 'active',
+        trades: [],
+        snapshots: [],
+      });
+
+      mockPrisma.trade.findUnique.mockResolvedValue({
+        id: 'trade-1',
+        backtestSessionId: 'session-1',
+        status: 'OPEN',
+      });
+
+      await expect(
+        service.closeTrade('user-1', 'session-1', 'trade-1', 0),
+      ).rejects.toThrow(new BadRequestException('Invalid exit price'));
+    });
+  });
+
+  // ─── loadCandlesForSession ───────────────────────────────────────
+
+  describe('loadCandlesForSession', () => {
+    it('should paginate beyond 20k candles without truncation', async () => {
+      const session = {
+        configuration: {
+          instrument: 'EURUSD',
+          timeframe: '1h',
+          timezone: 'UTC',
+          startDate: '2024-01-01T00:00:00.000Z',
+          endDate: '2024-12-31T23:59:59.000Z',
+          startingBalance: 10000,
+        },
+      };
+
+      const firstPage = Array.from({ length: 20000 }, (_v, i) => ({
+        id: `candle-${i + 1}`,
+        time: new Date(`2024-01-01T00:${String(i % 60).padStart(2, '0')}:00.000Z`),
+        open: 1.1,
+        high: 1.2,
+        low: 1.0,
+        close: 1.15,
+        volume: 100,
+      }));
+
+      const secondPage = [
+        {
+          id: 'candle-20001',
+          time: new Date('2024-01-02T00:00:00.000Z'),
+          open: 1.1,
+          high: 1.2,
+          low: 1.0,
+          close: 1.15,
+          volume: 100,
+        },
+      ];
+
+      mockPrisma.marketDataCandle.findMany
+        .mockResolvedValueOnce(firstPage)
+        .mockResolvedValueOnce(secondPage);
+
+      const result = await service.loadCandlesForSession(session);
+
+      expect(result).toHaveLength(20001);
+      expect(mockPrisma.marketDataCandle.findMany).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.marketDataCandle.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          cursor: { id: 'candle-20000' },
+          skip: 1,
+          take: 20000,
+        }),
+      );
     });
   });
 

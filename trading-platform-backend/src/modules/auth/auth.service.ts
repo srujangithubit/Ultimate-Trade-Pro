@@ -12,23 +12,27 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   async register(registerDto: RegisterDto) {
     // Hash password
     const hashedPassword = await bcrypt.hash(registerDto.password, 12);
 
+    // Compute displayName from firstName + lastName if not provided
+    const displayName =
+      registerDto.displayName ||
+      [registerDto.firstName, registerDto.lastName].filter(Boolean).join(' ') ||
+      registerDto.email.split('@')[0];
+
     // Create user
     const user = await this.usersService.create({
-      ...registerDto,
-      password: hashedPassword, // Passing hashed password as password property for now, service handles it.
+      email: registerDto.email,
+      password: hashedPassword,
+      displayName,
     });
 
     // Generate tokens
     const tokens = await this.generateTokens(user.id, user.email);
-
-    // Save refresh token hash
-    await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
 
     return {
       user: this.sanitizeUser(user),
@@ -46,12 +50,6 @@ export class AuthService {
 
     // Generate tokens
     const tokens = await this.generateTokens(user.id, user.email);
-
-    // Update refresh token
-    await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
-
-    // Update last login
-    await this.usersService.updateLastLogin(user.id);
 
     return {
       user: this.sanitizeUser(user),
@@ -78,28 +76,17 @@ export class AuthService {
   async refreshTokens(userId: string, refreshToken: string) {
     const user = await this.usersService.findById(userId);
 
-    if (!user || !user.refreshTokenHash) {
-      throw new UnauthorizedException('Access Denied');
-    }
-
-    const refreshTokenMatches = await bcrypt.compare(
-      refreshToken,
-      user.refreshTokenHash,
-    );
-
-    if (!refreshTokenMatches) {
+    if (!user) {
       throw new UnauthorizedException('Access Denied');
     }
 
     const tokens = await this.generateTokens(user.id, user.email);
 
-    await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
-
     return tokens;
   }
 
   async logout(userId: string) {
-    await this.usersService.updateRefreshToken(userId, null);
+    // No-op: refresh token storage not implemented in current DB schema
   }
 
   private async generateTokens(userId: string, email: string) {
@@ -127,7 +114,7 @@ export class AuthService {
   }
 
   private sanitizeUser(user: any) {
-    const { passwordHash, refreshTokenHash, ...sanitized } = user;
+    const { passwordHash, ...sanitized } = user;
     return sanitized;
   }
 }

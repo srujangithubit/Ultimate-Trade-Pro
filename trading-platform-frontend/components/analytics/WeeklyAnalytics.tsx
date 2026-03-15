@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Info } from 'lucide-react';
 import {
@@ -9,10 +10,10 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer,
     ReferenceLine,
     Cell
 } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import { formatCurrency } from '@/lib/utils/formatters';
 import { AnimatedHorizontalBar } from '@/components/ui/animated-bar';
 
@@ -29,7 +30,7 @@ interface WeeklyAnalyticsProps {
     data: WeeklyStats[];
 }
 
-export default function WeeklyAnalytics({ data }: WeeklyAnalyticsProps) {
+function WeeklyAnalytics({ data }: WeeklyAnalyticsProps) {
     if (!data || data.length === 0) {
         return null;
     }
@@ -47,7 +48,7 @@ export default function WeeklyAnalytics({ data }: WeeklyAnalyticsProps) {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[300px] w-full">
+                    <div className="h-75 w-full">
                         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <BarChart
                                 data={data}
@@ -110,7 +111,7 @@ export default function WeeklyAnalytics({ data }: WeeklyAnalyticsProps) {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[300px] w-full">
+                    <div className="h-75 w-full">
                         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <BarChart
                                 data={data}
@@ -177,3 +178,5 @@ export default function WeeklyAnalytics({ data }: WeeklyAnalyticsProps) {
         </div>
     );
 }
+
+export default memo(WeeklyAnalytics);

@@ -1,0 +1,90 @@
+name: Financial Invariant Monitor
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  financial-invariant-monitor:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      JWT_SECRET: ci-temp-jwt-secret
+      JWT_REFRESH_SECRET: ci-temp-refresh-secret
+      MT5_INTERNAL_API_KEY: ci-temp-internal-key
+      FINANCIAL_INVARIANT_REPORT_URL: disabled
+      FINANCIAL_INVARIANT_TRADE_SAMPLE_LIMIT: '3000'
+      FINANCIAL_INVARIANT_MAX_SQL_IDS: '5'
+      FINANCIAL_INVARIANT_MAX_SQL_TIMESTAMP_KEYS: '3'
+      FINANCIAL_INVARIANT_MAX_PARAMETER_IDS: '20'
+      FINANCIAL_INVARIANT_MAX_PARAMETER_TIMESTAMP_KEYS: '20'
+      FINANCIAL_INVARIANT_TRUNCATION_TEST_MODE: 'true'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: trading_platform
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Run financial invariant monitor
+        run: npm run financial:invariant:monitor || true
+
+      - name: Validate truncation flags
+        run: |
+          node -e "
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('artifacts/financial-invariant-report.json', 'utf8'));
+            if (!report.sql_query_truncated) {
+              console.error('Expected sql_query_truncated=true');
+              process.exit(1);
+            }
+            if (!report.parameters || !report.parameters.identifiers_truncated) {
+              console.error('Expected parameters.identifiers_truncated=true');
+              process.exit(1);
+            }
+          "
+
+      - name: Upload financial invariant artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-invariant-report
+          path: backend/artifacts/financial-invariant-report.json
+          if-no-files-found: warn

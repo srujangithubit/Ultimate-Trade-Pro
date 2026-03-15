@@ -1,8 +1,10 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils/formatters';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 
 interface AdvancedStatsProps {
     data: {
@@ -44,7 +46,7 @@ const StatBar = ({ label, value, isCurrency = false, type = 'neutral' }: { label
     );
 };
 
-export default function AdvancedStatsGrid({ data }: AdvancedStatsProps) {
+function AdvancedStatsGrid({ data }: AdvancedStatsProps) {
     const { equityCurve, stats } = data;
 
     return (
@@ -55,7 +57,7 @@ export default function AdvancedStatsGrid({ data }: AdvancedStatsProps) {
             <CardContent>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Equity Chart Area */}
-                    <div className="lg:col-span-1 h-[300px] bg-card/50 rounded-lg border border-border/50 p-4 flex flex-col">
+                    <div className="lg:col-span-1 h-75 bg-card/50 rounded-lg border border-border/50 p-4 flex flex-col">
                         <div className="flex justify-between items-start mb-4">
                             <div>
                                 <div className="text-sm font-medium text-muted-foreground">Equity Line</div>
@@ -66,8 +68,8 @@ export default function AdvancedStatsGrid({ data }: AdvancedStatsProps) {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex-1 min-h-0">
-                            <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+                        <div className="flex-1 min-h-0 overflow-hidden rounded-md">
+                            <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={equityCurve}>
                                     <defs>
                                         <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
@@ -115,3 +117,5 @@ export default function AdvancedStatsGrid({ data }: AdvancedStatsProps) {
         </Card>
     );
 }
+
+export default memo(AdvancedStatsGrid);

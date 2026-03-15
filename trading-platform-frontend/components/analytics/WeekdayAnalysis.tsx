@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Info } from 'lucide-react';
 import {
@@ -9,10 +10,10 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer,
     ReferenceLine,
     Cell
 } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import { formatCurrency } from '@/lib/utils/formatters';
 import { AnimatedHorizontalBar } from '@/components/ui/animated-bar';
 
@@ -30,7 +31,7 @@ interface WeekdayAnalysisProps {
     data: WeekdayStats[];
 }
 
-export default function WeekdayAnalysis({ data }: WeekdayAnalysisProps) {
+function WeekdayAnalysis({ data }: WeekdayAnalysisProps) {
     // Ensure day order (Sunday to Saturday) matches the source data usually
     // Recharts renders bottom-to-top by default for vertical categorical axes?
     // Actually, usually it renders in array order. Sunday first means Sunday at top if specific settings,
@@ -50,7 +51,7 @@ export default function WeekdayAnalysis({ data }: WeekdayAnalysisProps) {
                 </div>
             </CardHeader>
             <CardContent>
-                <div className="h-[300px] w-full">
+                <div className="h-75 w-full">
                     <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                         <BarChart
                             data={data}
@@ -109,3 +110,5 @@ export default function WeekdayAnalysis({ data }: WeekdayAnalysisProps) {
         </Card>
     );
 }
+
+export default memo(WeekdayAnalysis);

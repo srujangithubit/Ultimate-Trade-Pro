@@ -22,12 +22,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         if (!isMounted) return;
 
         // Protected routes
-        const protectedRoutes = ['/overview', '/dashboard', '/settings'];
-        const isProtectedRoute = protectedRoutes.some(route => pathname?.startsWith(route));
-
-        // Public only routes (redirect to overview if logged in)
         const publicOnlyRoutes = ['/login', '/register'];
         const isPublicOnlyRoute = publicOnlyRoutes.some(route => pathname?.startsWith(route));
+
+        // Everything except public-only routes is protected
+        const isProtectedRoute = !isPublicOnlyRoute && pathname !== '/';
 
         if (!isLoading) {
             if (isProtectedRoute && !isAuthenticated) {

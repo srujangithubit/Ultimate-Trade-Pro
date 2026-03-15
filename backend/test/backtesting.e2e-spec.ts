@@ -46,7 +46,7 @@ describe('Backtesting API (e2e)', () => {
       const user = await prisma.user.findUnique({
         where: { email: testUser.email },
       });
-      userId = user?.id;
+      userId = user!.id;
     } catch {
       console.warn('Database not available, skipping E2E tests');
     }

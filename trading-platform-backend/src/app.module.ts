@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SnakeNamingStrategy } from './common/snake-naming.strategy';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -15,6 +16,7 @@ import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { PlaybooksModule } from './modules/playbooks/playbooks.module';
+import { ChartsModule } from './modules/charts/charts.module';
 
 @Module({
   imports: [
@@ -29,7 +31,8 @@ import { PlaybooksModule } from './modules/playbooks/playbooks.module';
         password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: false,
+        namingStrategy: new SnakeNamingStrategy(),
       }),
       inject: [ConfigService],
     }),
@@ -45,6 +48,7 @@ import { PlaybooksModule } from './modules/playbooks/playbooks.module';
     AnalyticsModule,
     AccountsModule,
     PlaybooksModule,
+    ChartsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -552,7 +552,19 @@ export default function NewsPage() {
         if (timeFilter === 'past') return new Date(e.date) <= now;
         return true;
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const now = Date.now();
+        const aTime = new Date(a.date).getTime();
+        const bTime = new Date(b.date).getTime();
+        const aUpcoming = aTime > now;
+        const bUpcoming = bTime > now;
+        // Upcoming events first, sorted nearest-first (ascending)
+        if (aUpcoming && bUpcoming) return aTime - bTime;
+        // Past events after, sorted most-recent-first (descending)
+        if (!aUpcoming && !bUpcoming) return bTime - aTime;
+        // Upcoming always before past
+        return aUpcoming ? -1 : 1;
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, searchQuery, impactFilter, countryFilter, timeFilter, tick]);
 
@@ -563,7 +575,7 @@ export default function NewsPage() {
       total: events.length,
       highImpact: events.filter((e) => e.impact === 'high').length,
       upcoming: events.filter((e) => new Date(e.date) > now).length,
-      released: events.filter((e) => e.actual !== null).length,
+      released: events.filter((e) => new Date(e.date) <= now).length,
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, tick]);
@@ -648,7 +660,7 @@ export default function NewsPage() {
         </div>
 
         <Select value={impactFilter} onValueChange={setImpactFilter}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-40">
             <Filter className="h-4 w-4 mr-2" />
             <SelectValue placeholder="Impact" />
           </SelectTrigger>
@@ -661,7 +673,7 @@ export default function NewsPage() {
         </Select>
 
         <Select value={countryFilter} onValueChange={setCountryFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-45">
             <Globe className="h-4 w-4 mr-2" />
             <SelectValue placeholder="Country" />
           </SelectTrigger>
@@ -676,7 +688,7 @@ export default function NewsPage() {
         </Select>
 
         <Select value={timeFilter} onValueChange={setTimeFilter}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-37.5">
             <Clock className="h-4 w-4 mr-2" />
             <SelectValue placeholder="Time" />
           </SelectTrigger>
@@ -728,7 +740,7 @@ export default function NewsPage() {
                     key={event.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
+                    exit={{ opacity: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.04 }}
                   >
                     <Card className={`overflow-hidden border-l-4 ${impactCfg.border} hover:shadow-lg transition-shadow`}>
@@ -854,8 +866,10 @@ export default function NewsPage() {
                                   <Minus className="h-3.5 w-3.5 text-muted-foreground" />
                                 )}
                               </div>
-                            ) : (
+                            ) : isUpcoming ? (
                               <p className="text-sm text-muted-foreground italic">Pending</p>
+                            ) : (
+                              <p className="text-sm text-amber-500 font-medium">Released</p>
                             )}
                           </div>
                         </div>

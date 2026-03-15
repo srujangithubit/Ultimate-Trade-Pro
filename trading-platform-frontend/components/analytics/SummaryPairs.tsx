@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Table,
@@ -53,7 +54,7 @@ function WinRateBar({ winRate }: { winRate: number }) {
     );
 }
 
-export default function SummaryPairs({ data }: SummaryPairsProps) {
+function SummaryPairs({ data }: SummaryPairsProps) {
     const activePairs = (data || []).filter(d => d.count > 0);
 
     if (activePairs.length === 0) {
@@ -128,3 +129,5 @@ export default function SummaryPairs({ data }: SummaryPairsProps) {
         </Card>
     );
 }
+
+export default memo(SummaryPairs);

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency, formatNumber } from '@/lib/utils/formatters';
 
@@ -34,7 +35,7 @@ interface DetailedStatsGridProps {
     stats: DetailedStats;
 }
 
-export default function DetailedStatsGrid({ stats }: DetailedStatsGridProps) {
+function DetailedStatsGrid({ stats }: DetailedStatsGridProps) {
     const mainCards = [
         { title: 'Total P&L', value: formatCurrency(stats.totalPnl), large: true, positive: stats.totalPnl >= 0 },
         { title: 'Avg Trade P&L', value: formatCurrency(stats.expectancy), large: true },
@@ -99,3 +100,5 @@ export default function DetailedStatsGrid({ stats }: DetailedStatsGridProps) {
         </div>
     );
 }
+
+export default memo(DetailedStatsGrid);

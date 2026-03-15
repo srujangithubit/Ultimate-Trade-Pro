@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Info, Clock } from 'lucide-react';
 import {
@@ -10,10 +10,10 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer,
     ReferenceLine,
     Cell
 } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import { formatCurrency } from '@/lib/utils/formatters';
 import { AnimatedHorizontalBar } from '@/components/ui/animated-bar';
 import { TIMEZONES } from '@/lib/utils/timezones';
@@ -40,7 +40,7 @@ interface HourlyAnalyticsProps {
 
 
 
-export default function HourlyAnalytics({ data }: HourlyAnalyticsProps) {
+function HourlyAnalytics({ data }: HourlyAnalyticsProps) {
     const [statsTimezone, setStatsTimezone] = useState('UTC');
 
     const processedData = useMemo(() => {
@@ -98,7 +98,7 @@ export default function HourlyAnalytics({ data }: HourlyAnalyticsProps) {
                 <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <Select value={statsTimezone} onValueChange={setStatsTimezone}>
-                        <SelectTrigger className="w-[240px]">
+                        <SelectTrigger className="w-60">
                             <SelectValue placeholder="Select Timezone" />
                         </SelectTrigger>
                         <SelectContent>
@@ -123,7 +123,7 @@ export default function HourlyAnalytics({ data }: HourlyAnalyticsProps) {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[400px] w-full">
+                    <div className="h-100 w-full">
                         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <BarChart
                                 data={processedData}
@@ -185,7 +185,7 @@ export default function HourlyAnalytics({ data }: HourlyAnalyticsProps) {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[400px] w-full">
+                    <div className="h-100 w-full">
                         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <BarChart
                                 data={processedData}
@@ -252,3 +252,5 @@ export default function HourlyAnalytics({ data }: HourlyAnalyticsProps) {
         </div>
     );
 }
+
+export default memo(HourlyAnalytics);

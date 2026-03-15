@@ -1,0 +1,76 @@
+name: Replay Determinism Monitor
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Set true to force one synthetic determinism mismatch'
+        required: false
+        default: 'false'
+
+jobs:
+  determinism-monitor:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      JWT_SECRET: ci-temp-jwt-secret
+      JWT_REFRESH_SECRET: ci-temp-refresh-secret
+      MT5_INTERNAL_API_KEY: ci-temp-internal-key
+      DETERMINISM_CANDLES: '15000'
+      DETERMINISM_REPORT_URL: disabled
+      DETERMINISM_TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test_mode || 'false' }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: trading_platform
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Run determinism monitor
+        run: npm run determinism:monitor
+
+      - name: Upload determinism diff artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-determinism-diff
+          path: backend/artifacts/replay-determinism-diff.json
+          if-no-files-found: warn

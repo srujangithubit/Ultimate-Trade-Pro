@@ -48,6 +48,7 @@ const PAGE_ITEMS = [
   { name: 'Overview',    href: '/overview',     icon: LayoutDashboard, desc: 'Dashboard overview & summary' },
   { name: 'Accounts',    href: '/accounts',     icon: UserCircle,      desc: 'MT5 live trading accounts' },
   { name: 'Backtesting', href: '/backtesting',  icon: PlayCircle,      desc: 'Run strategy backtests' },
+  { name: 'Trade Analysis', href: '/trade-analysis', icon: FileText,   desc: 'Review account trade replays' },
   { name: 'Journal',     href: '/journal',      icon: BookOpen,        desc: 'Trade journal & notes' },
   { name: 'Analytics',   href: '/analytics',    icon: BarChart3,       desc: 'Performance analytics' },
   { name: 'Playbooks',   href: '/playbooks',    icon: BookMarked,      desc: 'Trading playbooks & setups' },

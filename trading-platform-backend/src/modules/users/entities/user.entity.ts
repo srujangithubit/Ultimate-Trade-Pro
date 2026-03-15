@@ -18,16 +18,10 @@ export class User {
   passwordHash: string;
 
   @Column({ nullable: true })
-  firstName: string;
+  displayName: string;
 
-  @Column({ nullable: true })
-  lastName: string;
-
-  @Column({ nullable: true })
-  refreshTokenHash: string;
-
-  @Column({ nullable: true })
-  lastLogin: Date;
+  @Column({ default: false })
+  isVerified: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

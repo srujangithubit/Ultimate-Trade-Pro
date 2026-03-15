@@ -1,0 +1,353 @@
+/**
+ * TradingView-style drawing tool registry.
+ * Every tool from TradingView's toolbar is defined here with metadata,
+ * grouped by category exactly as TradingView organises them.
+ */
+
+import type { DrawingStyle } from './types';
+
+// ── Tool identifier type ─────────────────────────────────────────────────
+
+export type DrawingToolId =
+  // Cursor / selection
+  | 'cursor' | 'crosshair' | 'dot'
+  // Line tools
+  | 'trendline' | 'ray' | 'extended-line' | 'trend-angle' | 'hline'
+  | 'hray' | 'vline' | 'cross-line' | 'parallel-channel' | 'info-line'
+  // Pitchfork
+  | 'pitchfork' | 'schiff-pitchfork' | 'mod-schiff-pitchfork' | 'inside-pitchfork'
+  // Gann
+  | 'gann-box' | 'gann-square' | 'gann-fan'
+  // Fibonacci
+  | 'fibonacci' | 'fib-extension' | 'fib-channel' | 'fib-timezone'
+  | 'fib-circle' | 'fib-speed-fan' | 'fib-wedge'
+  // Patterns
+  | 'xabcd' | 'cypher' | 'abcd' | 'triangle-pattern'
+  | 'three-drives' | 'head-shoulders' | 'elliott-impulse' | 'elliott-correction'
+  // Prediction / Position
+  | 'long-position' | 'short-position' | 'projection' | 'price-range'
+  | 'date-range' | 'date-price-range' | 'bars-pattern'
+  // Annotation
+  | 'text' | 'anchored-text' | 'callout' | 'price-label' | 'arrow-marker'
+  | 'flag-mark' | 'note' | 'signpost'
+  // Shapes
+  | 'rectangle' | 'rotated-rectangle' | 'circle' | 'ellipse'
+  | 'triangle-shape' | 'polyline' | 'curve' | 'arc'
+  // Brush
+  | 'brush' | 'highlighter'
+  // Measure / utility
+  | 'measure' | 'eraser' | 'zoom-in' | 'zoom-out'
+  | 'magnet' | 'lock' | 'show-hide' | 'trash';
+
+// ── Tool metadata ────────────────────────────────────────────────────────
+
+export interface ToolMeta {
+  id: DrawingToolId;
+  label: string;
+  /** SVG path for icon (20×20 viewBox) */
+  icon: string;
+  /** Number of clicks to complete drawing (0 = action, 1 = single, 2+ = multi) */
+  clicks: number;
+  /** Default style overrides */
+  style: DrawingStyle;
+  /** Keyboard shortcut */
+  shortcut?: string;
+}
+
+// ── Default styles ───────────────────────────────────────────────────────
+
+const S_LINE: DrawingStyle      = { color: '#2962FF', lineWidth: 2, lineStyle: 'solid' };
+const S_LINE_THIN: DrawingStyle = { color: '#2962FF', lineWidth: 1, lineStyle: 'solid' };
+const S_DASH: DrawingStyle      = { color: '#787B86', lineWidth: 1, lineStyle: 'dashed' };
+const S_FIB: DrawingStyle       = { color: '#787B86', lineWidth: 1, lineStyle: 'dashed' };
+const S_SHAPE: DrawingStyle     = { color: '#2196F3', lineWidth: 1, lineStyle: 'solid', fillColor: '#2196F3', fillOpacity: 0.1 };
+const S_BUY: DrawingStyle       = { color: '#26A69A', lineWidth: 1, lineStyle: 'solid', fillColor: '#26A69A', fillOpacity: 0.12 };
+const S_SELL: DrawingStyle      = { color: '#EF5350', lineWidth: 1, lineStyle: 'solid', fillColor: '#EF5350', fillOpacity: 0.12 };
+const S_TEXT: DrawingStyle      = { color: '#D1D4DC', lineWidth: 1, lineStyle: 'solid', fontSize: 14 };
+const S_MEASURE: DrawingStyle   = { color: '#D1D4DC', lineWidth: 1, lineStyle: 'dashed' };
+const S_BRUSH: DrawingStyle     = { color: '#FF6D00', lineWidth: 3, lineStyle: 'solid' };
+
+// ── SVG icon paths (20×20 viewBox) ───────────────────────────────────────
+
+export const ICONS: Record<string, string> = {
+  cursor:            'M5 3l10 7.5L10 13l-1.5 5L5 3z',
+  crosshair:         'M10 2v16M2 10h16M10 7a3 3 0 110 6 3 3 0 010-6z',
+  dot:               'M10 7a3 3 0 110 6 3 3 0 010-6z',
+
+  trendline:         'M4 16L16 4',
+  ray:               'M4 16L16 4M16 4l-4 1M16 4l-1 4',
+  'extended-line':   'M2 14L18 6',
+  'trend-angle':     'M4 16L16 4M4 16h12M13 16v-9',
+  hline:             'M2 10h16',
+  hray:              'M4 10h14M18 10l-3-2M18 10l-3 2',
+  vline:             'M10 2v16',
+  'cross-line':      'M10 2v16M2 10h16',
+  'parallel-channel':'M3 14L14 6M6 18L17 10',
+  'info-line':       'M4 16L16 4M16 4v5M16 4h-5',
+
+  pitchfork:         'M3 16L10 4l7 12M10 4v14M5 12h10',
+  'schiff-pitchfork':'M3 16L10 4l7 12M6.5 10v8M10 4v14',
+  'mod-schiff-pitchfork': 'M3 16L10 4l7 12M6.5 10v8M10 4v14',
+  'inside-pitchfork':'M3 16L10 4l7 12M10 4v14M6 10h8',
+
+  'gann-box':        'M3 3h14v14H3zM3 3l14 14M17 3L3 17M3 10h14M10 3v14',
+  'gann-square':     'M3 3h14v14H3zM3 3l14 14M17 3L3 17',
+  'gann-fan':        'M3 17L17 3M3 17l14-7M3 17h14M3 17l7-14',
+
+  fibonacci:         'M3 5h14M3 8h14M3 10h14M3 12h14M3 15h14',
+  'fib-extension':   'M3 15h14M3 12h14M3 10h14M3 5h14M3 2h14',
+  'fib-channel':     'M3 14L14 6M3 18L14 10M3 10L14 2',
+  'fib-timezone':    'M3 3v14M7 3v14M13 3v14M18 3v14',
+  'fib-circle':      'M10 10m-7 0a7 7 0 1114 0a7 7 0 01-14 0M10 10m-4.5 0a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0M10 10m-2.5 0a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0',
+  'fib-speed-fan':   'M3 17L17 3M3 17l14-7M3 17L10 3',
+  'fib-wedge':       'M4 16L10 4l6 12M7 10l3-6 3 6',
+
+  xabcd:             'M3 12L6 5l4 9 4-9 3 7',
+  cypher:            'M3 14L7 4l3 10 4-8 3 6',
+  abcd:              'M4 12L8 5l4 7 4-7',
+  'triangle-pattern':'M3 15L10 5l7 10H3z',
+  'three-drives':    'M3 15L6 6l3 9 3-9 3 9 2-5',
+  'head-shoulders':  'M2 14L5 8l3 6 2-10 2 10 3-6 3 6',
+  'elliott-impulse': 'M2 16L5 4l2 8 3-10 2 6 4-8 2 14',
+  'elliott-correction': 'M3 4l4 12-3-8 4 12 4-12',
+
+  'long-position':   'M4 16l6-12 6 12M10 4v12M6 8h8',
+  'short-position':  'M4 4l6 12 6-12M10 16V4M6 12h8',
+  projection:        'M4 14L8 6l4 8 4-8',
+  'price-range':     'M4 6h12M4 14h12M4 6v8',
+  'date-range':      'M6 4v12M14 4v12M6 10h8',
+  'date-price-range':'M4 6h12M4 14h12M6 4v12M14 4v12',
+  'bars-pattern':    'M4 8v8M7 6v10M10 4v12M13 7v9M16 5v11',
+
+  text:              'M4 4h12M10 4v12M7 4v1M13 4v1',
+  'anchored-text':   'M4 4h12M10 4v12M10 16l-2 2M10 16l2 2',
+  callout:           'M4 4h12v10H10l-3 3v-3H4V4z',
+  'price-label':     'M14 4H6l-3 6 3 6h8l3-6-3-6z',
+  'arrow-marker':    'M10 3v14M10 3l-4 4M10 3l4 4',
+  'flag-mark':       'M5 3v14M5 3h10l-3 4 3 4H5',
+  note:              'M4 4h12v12H4V4zM7 8h6M7 11h4',
+  signpost:          'M10 3v14M6 5h8l-2 3 2 3H6',
+
+  rectangle:         'M3 5h14v10H3V5z',
+  'rotated-rectangle': 'M10 3l7 7-7 7-7-7 7-7z',
+  circle:            'M10 3a7 7 0 110 14 7 7 0 010-14z',
+  ellipse:           'M10 5c4 0 7 2.2 7 5s-3 5-7 5-7-2.2-7-5 3-5 7-5z',
+  'triangle-shape':  'M10 4L3 16h14L10 4z',
+  polyline:          'M3 14l4-8 4 5 3-6 3 9',
+  curve:             'M3 14Q7 2 10 10t7-4',
+  arc:               'M3 14Q10 2 17 14',
+
+  brush:             'M6 14l2-3 4-5 3-2 2 1-3 5-4 5-1 2z',
+  highlighter:       'M4 10h12v4H4v-4z',
+
+  measure:           'M4 4v12M16 4v12M4 10h12M4 10l2-2M4 10l2 2M16 10l-2-2M16 10l-2 2',
+  eraser:            'M8 4l8 8-4 4H6l-2-2 4-10z',
+  'zoom-in':         'M9 4a5 5 0 110 10 5 5 0 010-10zM13 13l4 4M9 7v4M7 9h4',
+  'zoom-out':        'M9 4a5 5 0 110 10 5 5 0 010-10zM13 13l4 4M7 9h4',
+  magnet:            'M6 10V6a4 4 0 018 0v4M6 10h2M12 10h2M8 10v4M12 10v4',
+  lock:              'M6 10V7a4 4 0 018 0v3M5 10h10v7H5v-7z',
+  'show-hide':       'M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6zM10 8a2 2 0 110 4 2 2 0 010-4z',
+  trash:             'M5 5h10M8 5V3h4v2M6 5v11h8V5',
+};
+
+// ── Tool registry ────────────────────────────────────────────────────────
+
+export const TOOLS: Record<DrawingToolId, ToolMeta> = {
+  // ── Cursor ──
+  cursor:              { id: 'cursor',              label: 'Cursor',                icon: ICONS.cursor,              clicks: 0, style: S_LINE,      shortcut: 'V' },
+  crosshair:           { id: 'crosshair',           label: 'Crosshair',             icon: ICONS.crosshair,           clicks: 0, style: S_LINE,      shortcut: 'C' },
+  dot:                 { id: 'dot',                 label: 'Dot',                   icon: ICONS.dot,                 clicks: 0, style: S_LINE },
+
+  // ── Line tools ──
+  trendline:           { id: 'trendline',           label: 'Trend Line',            icon: ICONS.trendline,           clicks: 2, style: S_LINE,      shortcut: 'T' },
+  ray:                 { id: 'ray',                 label: 'Ray',                   icon: ICONS.ray,                 clicks: 2, style: S_LINE,      shortcut: 'R' },
+  'extended-line':     { id: 'extended-line',       label: 'Extended Line',         icon: ICONS['extended-line'],     clicks: 2, style: S_LINE },
+  'trend-angle':       { id: 'trend-angle',         label: 'Trend Angle',           icon: ICONS['trend-angle'],      clicks: 2, style: S_LINE },
+  hline:               { id: 'hline',               label: 'Horizontal Line',       icon: ICONS.hline,               clicks: 1, style: S_DASH,      shortcut: 'H' },
+  hray:                { id: 'hray',                label: 'Horizontal Ray',        icon: ICONS.hray,                clicks: 2, style: S_LINE },
+  vline:               { id: 'vline',               label: 'Vertical Line',         icon: ICONS.vline,               clicks: 1, style: S_DASH },
+  'cross-line':        { id: 'cross-line',          label: 'Cross Line',            icon: ICONS['cross-line'],       clicks: 1, style: S_DASH },
+  'parallel-channel':  { id: 'parallel-channel',    label: 'Parallel Channel',      icon: ICONS['parallel-channel'], clicks: 3, style: { ...S_LINE, fillColor: '#2962FF', fillOpacity: 0.05 } },
+  'info-line':         { id: 'info-line',           label: 'Info Line',             icon: ICONS['info-line'],        clicks: 2, style: S_LINE },
+
+  // ── Pitchfork ──
+  pitchfork:           { id: 'pitchfork',           label: 'Pitchfork',             icon: ICONS.pitchfork,           clicks: 3, style: S_LINE },
+  'schiff-pitchfork':  { id: 'schiff-pitchfork',    label: 'Schiff Pitchfork',      icon: ICONS['schiff-pitchfork'], clicks: 3, style: S_LINE },
+  'mod-schiff-pitchfork': { id: 'mod-schiff-pitchfork', label: 'Modified Schiff',   icon: ICONS['mod-schiff-pitchfork'], clicks: 3, style: S_LINE },
+  'inside-pitchfork':  { id: 'inside-pitchfork',    label: 'Inside Pitchfork',      icon: ICONS['inside-pitchfork'], clicks: 3, style: S_LINE },
+
+  // ── Gann ──
+  'gann-box':          { id: 'gann-box',            label: 'Gann Box',              icon: ICONS['gann-box'],         clicks: 2, style: S_SHAPE },
+  'gann-square':       { id: 'gann-square',         label: 'Gann Square',           icon: ICONS['gann-square'],      clicks: 2, style: S_SHAPE },
+  'gann-fan':          { id: 'gann-fan',            label: 'Gann Fan',              icon: ICONS['gann-fan'],         clicks: 2, style: S_LINE },
+
+  // ── Fibonacci ──
+  fibonacci:           { id: 'fibonacci',           label: 'Fib Retracement',       icon: ICONS.fibonacci,           clicks: 2, style: S_FIB,       shortcut: 'F' },
+  'fib-extension':     { id: 'fib-extension',       label: 'Fib Extension',         icon: ICONS['fib-extension'],    clicks: 3, style: S_FIB },
+  'fib-channel':       { id: 'fib-channel',         label: 'Fib Channel',           icon: ICONS['fib-channel'],      clicks: 3, style: S_FIB },
+  'fib-timezone':      { id: 'fib-timezone',        label: 'Fib Time Zone',         icon: ICONS['fib-timezone'],     clicks: 2, style: S_FIB },
+  'fib-circle':        { id: 'fib-circle',          label: 'Fib Circle',            icon: ICONS['fib-circle'],       clicks: 2, style: S_FIB },
+  'fib-speed-fan':     { id: 'fib-speed-fan',       label: 'Fib Speed Fan',         icon: ICONS['fib-speed-fan'],    clicks: 2, style: S_FIB },
+  'fib-wedge':         { id: 'fib-wedge',           label: 'Fib Wedge',             icon: ICONS['fib-wedge'],        clicks: 3, style: S_FIB },
+
+  // ── Patterns ──
+  xabcd:               { id: 'xabcd',               label: 'XABCD Pattern',         icon: ICONS.xabcd,               clicks: 5, style: S_LINE },
+  cypher:              { id: 'cypher',              label: 'Cypher Pattern',        icon: ICONS.cypher,              clicks: 5, style: S_LINE },
+  abcd:                { id: 'abcd',                label: 'ABCD Pattern',          icon: ICONS.abcd,                clicks: 4, style: S_LINE },
+  'triangle-pattern':  { id: 'triangle-pattern',    label: 'Triangle Pattern',      icon: ICONS['triangle-pattern'], clicks: 3, style: S_LINE },
+  'three-drives':      { id: 'three-drives',        label: 'Three Drives',          icon: ICONS['three-drives'],     clicks: 7, style: S_LINE },
+  'head-shoulders':    { id: 'head-shoulders',      label: 'Head & Shoulders',      icon: ICONS['head-shoulders'],   clicks: 7, style: S_LINE },
+  'elliott-impulse':   { id: 'elliott-impulse',     label: 'Elliott Impulse',       icon: ICONS['elliott-impulse'],  clicks: 6, style: S_LINE },
+  'elliott-correction':{ id: 'elliott-correction',  label: 'Elliott Correction',    icon: ICONS['elliott-correction'], clicks: 4, style: S_LINE },
+
+  // ── Position / Prediction ──
+  'long-position':     { id: 'long-position',       label: 'Long Position',         icon: ICONS['long-position'],    clicks: 3, style: S_BUY,       shortcut: 'L' },
+  'short-position':    { id: 'short-position',      label: 'Short Position',        icon: ICONS['short-position'],   clicks: 3, style: S_SELL,      shortcut: 'S' },
+  projection:          { id: 'projection',          label: 'Projection',            icon: ICONS.projection,          clicks: 3, style: S_LINE },
+  'price-range':       { id: 'price-range',         label: 'Price Range',           icon: ICONS['price-range'],      clicks: 2, style: S_SHAPE },
+  'date-range':        { id: 'date-range',          label: 'Date Range',            icon: ICONS['date-range'],       clicks: 2, style: S_SHAPE },
+  'date-price-range':  { id: 'date-price-range',    label: 'Date & Price Range',    icon: ICONS['date-price-range'], clicks: 2, style: S_SHAPE },
+  'bars-pattern':      { id: 'bars-pattern',        label: 'Bars Pattern',          icon: ICONS['bars-pattern'],     clicks: 2, style: S_LINE },
+
+  // ── Annotation ──
+  text:                { id: 'text',                label: 'Text',                  icon: ICONS.text,                clicks: 1, style: S_TEXT,       shortcut: 'A' },
+  'anchored-text':     { id: 'anchored-text',       label: 'Anchored Text',         icon: ICONS['anchored-text'],    clicks: 1, style: S_TEXT },
+  callout:             { id: 'callout',             label: 'Callout',               icon: ICONS.callout,             clicks: 2, style: { ...S_TEXT, fillColor: '#2962FF', fillOpacity: 0.08 } },
+  'price-label':       { id: 'price-label',         label: 'Price Label',           icon: ICONS['price-label'],      clicks: 1, style: S_TEXT },
+  'arrow-marker':      { id: 'arrow-marker',        label: 'Arrow',                 icon: ICONS['arrow-marker'],     clicks: 1, style: { ...S_LINE, color: '#26A69A' } },
+  'flag-mark':         { id: 'flag-mark',           label: 'Flag',                  icon: ICONS['flag-mark'],        clicks: 1, style: { ...S_LINE, color: '#EF5350' } },
+  note:                { id: 'note',                label: 'Note',                  icon: ICONS.note,                clicks: 1, style: S_TEXT },
+  signpost:            { id: 'signpost',            label: 'Signpost',              icon: ICONS.signpost,            clicks: 1, style: S_LINE },
+
+  // ── Shapes ──
+  rectangle:           { id: 'rectangle',           label: 'Rectangle',             icon: ICONS.rectangle,           clicks: 2, style: S_SHAPE,     shortcut: 'B' },
+  'rotated-rectangle': { id: 'rotated-rectangle',   label: 'Rotated Rectangle',     icon: ICONS['rotated-rectangle'], clicks: 3, style: S_SHAPE },
+  circle:              { id: 'circle',              label: 'Circle',                icon: ICONS.circle,              clicks: 2, style: S_SHAPE },
+  ellipse:             { id: 'ellipse',             label: 'Ellipse',               icon: ICONS.ellipse,             clicks: 2, style: S_SHAPE },
+  'triangle-shape':    { id: 'triangle-shape',      label: 'Triangle',              icon: ICONS['triangle-shape'],   clicks: 3, style: S_SHAPE },
+  polyline:            { id: 'polyline',            label: 'Polyline',              icon: ICONS.polyline,            clicks: 99, style: S_LINE },  // double-click to finish
+  curve:               { id: 'curve',               label: 'Curve',                 icon: ICONS.curve,               clicks: 3, style: S_LINE },
+  arc:                 { id: 'arc',                 label: 'Arc',                   icon: ICONS.arc,                 clicks: 3, style: S_LINE },
+
+  // ── Brush ──
+  brush:               { id: 'brush',               label: 'Brush',                 icon: ICONS.brush,               clicks: -1, style: S_BRUSH },  // -1 = freehand
+  highlighter:         { id: 'highlighter',         label: 'Highlighter',           icon: ICONS.highlighter,         clicks: -1, style: { ...S_BRUSH, color: '#FFEB3B', lineWidth: 12, fillOpacity: 0.3 } },
+
+  // ── Actions ──
+  measure:             { id: 'measure',             label: 'Measure',               icon: ICONS.measure,             clicks: 2, style: S_MEASURE,   shortcut: 'M' },
+  eraser:              { id: 'eraser',              label: 'Remove Last',           icon: ICONS.eraser,              clicks: 0, style: S_LINE },
+  'zoom-in':           { id: 'zoom-in',             label: 'Zoom In',               icon: ICONS['zoom-in'],          clicks: 0, style: S_LINE },
+  'zoom-out':          { id: 'zoom-out',            label: 'Zoom Out',              icon: ICONS['zoom-out'],         clicks: 0, style: S_LINE },
+  magnet:              { id: 'magnet',              label: 'Magnet Mode',           icon: ICONS.magnet,              clicks: 0, style: S_LINE },
+  lock:                { id: 'lock',                label: 'Lock Drawings',         icon: ICONS.lock,                clicks: 0, style: S_LINE },
+  'show-hide':         { id: 'show-hide',           label: 'Show/Hide All',         icon: ICONS['show-hide'],        clicks: 0, style: S_LINE },
+  trash:               { id: 'trash',               label: 'Delete All',            icon: ICONS.trash,               clicks: 0, style: S_LINE },
+};
+
+// ── Toolbar category groups (matching TradingView's sidebar) ─────────────
+
+export interface ToolGroupDef {
+  id: string;
+  label: string;
+  tools: DrawingToolId[];
+  section: 'cursor' | 'lines' | 'forks' | 'gann' | 'fib' | 'patterns' | 'prediction' | 'annotation' | 'shapes' | 'brush' | 'measure' | 'actions';
+}
+
+export const TOOL_GROUPS: ToolGroupDef[] = [
+  // 1. Cursor
+  {
+    id: 'cursor-group',
+    label: 'Cursor Tools',
+    section: 'cursor',
+    tools: ['cursor', 'crosshair', 'dot'],
+  },
+  // 2. Lines
+  {
+    id: 'lines-group',
+    label: 'Line Tools',
+    section: 'lines',
+    tools: ['trendline', 'ray', 'info-line', 'extended-line', 'trend-angle', 'hline', 'hray', 'vline', 'cross-line', 'parallel-channel'],
+  },
+  // 3. Pitchfork
+  {
+    id: 'forks-group',
+    label: 'Pitchfork Tools',
+    section: 'forks',
+    tools: ['pitchfork', 'schiff-pitchfork', 'mod-schiff-pitchfork', 'inside-pitchfork'],
+  },
+  // 4. Gann
+  {
+    id: 'gann-group',
+    label: 'Gann Tools',
+    section: 'gann',
+    tools: ['gann-box', 'gann-square', 'gann-fan'],
+  },
+  // 5. Fibonacci
+  {
+    id: 'fib-group',
+    label: 'Fibonacci Tools',
+    section: 'fib',
+    tools: ['fibonacci', 'fib-extension', 'fib-channel', 'fib-timezone', 'fib-circle', 'fib-speed-fan', 'fib-wedge'],
+  },
+  // 6. Patterns
+  {
+    id: 'patterns-group',
+    label: 'Pattern Tools',
+    section: 'patterns',
+    tools: ['xabcd', 'cypher', 'abcd', 'triangle-pattern', 'three-drives', 'head-shoulders', 'elliott-impulse', 'elliott-correction'],
+  },
+  // 7. Prediction / Position
+  {
+    id: 'prediction-group',
+    label: 'Prediction & Position',
+    section: 'prediction',
+    tools: ['long-position', 'short-position', 'projection', 'price-range', 'date-range', 'date-price-range', 'bars-pattern'],
+  },
+  // 8. Annotation
+  {
+    id: 'annotation-group',
+    label: 'Annotation Tools',
+    section: 'annotation',
+    tools: ['text', 'anchored-text', 'callout', 'price-label', 'arrow-marker', 'flag-mark', 'note', 'signpost'],
+  },
+  // 9. Shapes
+  {
+    id: 'shapes-group',
+    label: 'Shape Tools',
+    section: 'shapes',
+    tools: ['rectangle', 'rotated-rectangle', 'circle', 'ellipse', 'triangle-shape', 'polyline', 'curve', 'arc'],
+  },
+  // 10. Brush
+  {
+    id: 'brush-group',
+    label: 'Brush Tools',
+    section: 'brush',
+    tools: ['brush', 'highlighter'],
+  },
+  // 11. Measure
+  {
+    id: 'measure-group',
+    label: 'Measure',
+    section: 'measure',
+    tools: ['measure'],
+  },
+];
+
+/** Action buttons (bottom of toolbar) */
+export const ACTION_TOOLS: DrawingToolId[] = [
+  'zoom-in', 'zoom-out', 'magnet', 'eraser', 'lock', 'show-hide', 'trash',
+];
+
+/** Non-drawing tools (actions that fire immediately) */
+export const NON_DRAWING_IDS = new Set<DrawingToolId>([
+  'cursor', 'crosshair', 'dot',
+  'trash', 'eraser', 'lock', 'show-hide', 'zoom-in', 'zoom-out', 'magnet',
+]);
+
+/** Build a shortcut → toolId lookup */
+export const SHORTCUT_MAP: Record<string, DrawingToolId> = {};
+for (const [id, meta] of Object.entries(TOOLS)) {
+  if (meta.shortcut) {
+    SHORTCUT_MAP[meta.shortcut.toLowerCase()] = id as DrawingToolId;
+  }
+}

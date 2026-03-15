@@ -793,9 +793,9 @@ function ResultCard({ label, value, highlight }: { label: string; value: string 
                 : 'text-foreground';
 
     return (
-        <div className="rounded-lg border bg-muted/30 p-3">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className={`text-sm font-bold font-mono ${colorClass}`}>{value}</p>
+        <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+            <p className={`mt-1 text-base font-semibold font-mono ${colorClass}`}>{value}</p>
         </div>
     );
 }
@@ -826,29 +826,31 @@ export default function CalculatorsPage() {
     const activeCalc = calculators.find(c => c.id === openCalc);
 
     return (
-        <div className="space-y-6">
+        <div className="mx-auto w-full max-w-370 space-y-8">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">Calculators</h1>
-                <p className="text-muted-foreground">
+                <h1 className="text-3xl font-semibold leading-tight tracking-[-0.01em] md:text-4xl">Tools</h1>
+                <p className="mt-1.5 text-sm text-muted-foreground md:text-[15px]">
                     Professional trading calculators to help you size positions, manage risk, and estimate outcomes.
                 </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {calculators.map((calc) => (
-                    <Card key={calc.id} className="group hover:shadow-lg transition-all duration-200 hover:border-primary/50">
-                        <CardContent className="p-6 space-y-3">
-                            <div className="flex items-center gap-2">
-                                <calc.icon className="h-5 w-5 text-primary" />
-                                <h3 className="font-semibold">{calc.name}</h3>
+                    <Card key={calc.id} className="group h-full">
+                        <CardContent className="flex min-h-47.5 flex-col p-5 md:p-6">
+                            <div className="flex items-center gap-2.5">
+                                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-primary/10">
+                                    <calc.icon className="h-5 w-5 text-primary" />
+                                </span>
+                                <h3 className="text-lg font-semibold leading-none">{calc.name}</h3>
                             </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
+                            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                                 {calc.description}
                             </p>
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="text-primary border-primary/30 hover:bg-primary/10"
+                                className="mt-auto h-9 w-full rounded-xl border-primary/30 text-primary hover:bg-primary/10"
                                 onClick={() => setOpenCalc(calc.id)}
                             >
                                 Open
@@ -860,14 +862,14 @@ export default function CalculatorsPage() {
 
             {/* Calculator Dialog */}
             <Dialog open={!!openCalc} onOpenChange={(open) => { if (!open) setOpenCalc(null); }}>
-                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto rounded-2xl border-border/80 p-0">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
+                        <DialogTitle className="flex items-center gap-2 border-b border-border/70 px-6 py-4 text-lg">
                             {activeCalc && <activeCalc.icon className="h-5 w-5 text-primary" />}
                             {activeCalc?.name} Calculator
                         </DialogTitle>
                     </DialogHeader>
-                    {openCalc && calculatorComponents[openCalc]}
+                    <div className="px-6 pb-6 pt-5">{openCalc && calculatorComponents[openCalc]}</div>
                 </DialogContent>
             </Dialog>
         </div>

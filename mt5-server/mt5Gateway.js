@@ -9,12 +9,15 @@ const EventEmitter = require("events");
 class MT5Gateway extends EventEmitter {
   constructor(pythonWsUrl = "ws://localhost:8765") {
     super();
+    this.setMaxListeners(50);
     this.pythonWsUrl = pythonWsUrl;
     this.ws = null;
     this.connected = false;
     this.authenticated = false;
     this.reconnectInterval = 5000;
     this._reconnectTimer = null;
+    // Reference counting for subscriptions: symbol -> count
+    this._subCounts = {};
   }
 
   /**
@@ -34,6 +37,12 @@ class MT5Gateway extends EventEmitter {
         this.connected = true;
         settled = true;
         console.log("[MT5Gateway] Connected to Python bridge");
+        // Re-subscribe all active symbols after reconnect
+        for (const symbol of Object.keys(this._subCounts)) {
+          if (this._subCounts[symbol] > 0) {
+            this._send({ action: "subscribe", symbol });
+          }
+        }
         this.emit("connected");
         resolve();
       });
@@ -68,28 +77,50 @@ class MT5Gateway extends EventEmitter {
 
   /**
    * Authenticate with MT5 credentials.
+   * Returns a promise that resolves to true/false based on auth success.
    */
-  async authenticate(server, login, password) {
-    this._send({
-      action: "connect",
-      server,
-      login,
-      password,
+  authenticate(server, login, password) {
+    return new Promise((resolve, reject) => {
+      const sent = this._send({
+        action: "connect",
+        server,
+        login,
+        password,
+      });
+      if (!sent) {
+        return reject(new Error("Python bridge is not connected"));
+      }
+      const timeout = setTimeout(() => resolve(false), 10000);
+      this.once("auth", (success) => {
+        clearTimeout(timeout);
+        resolve(success);
+      });
     });
   }
 
   /**
-   * Subscribe to tick data for a symbol.
+   * Subscribe to tick data for a symbol (reference counted).
+   * Only sends to Python bridge on first subscriber.
    */
   subscribe(symbol) {
-    this._send({ action: "subscribe", symbol });
+    this._subCounts[symbol] = (this._subCounts[symbol] || 0) + 1;
+    if (this._subCounts[symbol] === 1) {
+      // First subscriber — actually subscribe on the bridge
+      this._send({ action: "subscribe", symbol });
+    }
   }
 
   /**
-   * Unsubscribe from tick data for a symbol.
+   * Unsubscribe from tick data for a symbol (reference counted).
+   * Only sends to Python bridge when last subscriber leaves.
    */
   unsubscribe(symbol) {
-    this._send({ action: "unsubscribe", symbol });
+    if (!this._subCounts[symbol]) return;
+    this._subCounts[symbol]--;
+    if (this._subCounts[symbol] <= 0) {
+      delete this._subCounts[symbol];
+      this._send({ action: "unsubscribe", symbol });
+    }
   }
 
   /**
@@ -100,10 +131,18 @@ class MT5Gateway extends EventEmitter {
   }
 
   /**
-   * Request open positions.
+   * Request open positions for the currently connected account.
    */
   requestPositions() {
     this._send({ action: "positions" });
+  }
+
+  /**
+   * Query open positions for a specific MT5 account.
+   * Temporarily switches the terminal to the target account then switches back.
+   */
+  queryPositions(login, password, server) {
+    this._send({ action: "query_positions", login, password, server });
   }
 
   /**
@@ -114,12 +153,73 @@ class MT5Gateway extends EventEmitter {
   }
 
   /**
+   * Request OHLCV candle data for a symbol/timeframe.
+   */
+  requestOHLCV(symbol, timeframe = "M5", bars = 200) {
+    this._send({ action: "ohlcv", symbol, timeframe, bars });
+  }
+
+  /**
    * Disconnect the MT5 terminal session (keeps the Python bridge WebSocket alive).
    * Sends a "disconnect" action to the Python bridge so it calls mt5.shutdown().
    */
   disconnectMT5() {
     this._send({ action: "disconnect" });
     this.authenticated = false;
+  }
+
+  /**
+   * Query account info for a specific MT5 account.
+   * Temporarily switches the terminal to the target account then switches back.
+   */
+  queryAccount(login, password, server) {
+    this._send({ action: "query_account", login, password, server });
+  }
+
+  /**
+   * Place a market order on the currently connected account or a specified account.
+   */
+  placeOrder({ symbol, direction, volume, price, sl, tp, slippage, magic, comment, login, password, server }) {
+    this._send({
+      action: "place_order",
+      symbol, direction, volume, price, sl, tp,
+      slippage: slippage || 5,
+      magic: magic || 123456,
+      comment: comment || "TradePro_Sync",
+      login: login || null,
+      password: password || null,
+      server: server || null,
+    });
+  }
+
+  /**
+   * Close an open position by ticket.
+   */
+  closePosition({ ticket, volume, slippage, login, password, server }) {
+    this._send({
+      action: "close_position",
+      ticket,
+      volume: volume || null,
+      slippage: slippage || 5,
+      login: login || null,
+      password: password || null,
+      server: server || null,
+    });
+  }
+
+  /**
+   * Modify SL/TP of an open position.
+   */
+  modifyPosition({ ticket, sl, tp, login, password, server }) {
+    this._send({
+      action: "modify_position",
+      ticket,
+      sl: sl !== undefined ? sl : null,
+      tp: tp !== undefined ? tp : null,
+      login: login || null,
+      password: password || null,
+      server: server || null,
+    });
   }
 
   /**
@@ -172,6 +272,24 @@ class MT5Gateway extends EventEmitter {
         break;
       case "trade_history":
         this.emit("trade_history", msg.data);
+        break;
+      case "ohlcv":
+        this.emit("ohlcv", msg);
+        break;
+      case "query_account":
+        this.emit("query_account", msg.data);
+        break;
+      case "query_positions":
+        this.emit("query_positions", { login: msg.login, data: msg.data });
+        break;
+      case "place_order":
+        this.emit("place_order", msg.data);
+        break;
+      case "close_position":
+        this.emit("close_position", msg.data);
+        break;
+      case "modify_position":
+        this.emit("modify_position", msg.data);
         break;
       case "subscribed":
         this.emit("subscribed", msg.symbol);

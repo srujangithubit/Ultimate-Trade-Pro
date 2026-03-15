@@ -2,10 +2,14 @@ import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { HeartbeatDto, Mt5TradeDto } from './dto/mt5.dto';
 import { TradingAccount } from '@prisma/client';
+import { ObservabilityService } from '../observability/observability.service';
 
 @Injectable()
 export class Mt5Service {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly observability: ObservabilityService,
+  ) {}
 
   /**
    * Process heartbeat from MT5 EA.
@@ -22,6 +26,8 @@ export class Mt5Service {
         lastSeen: new Date(),
       },
     });
+
+    this.observability.markMt5Heartbeat(updated.id);
 
     return {
       status: 'ok',
@@ -87,6 +93,7 @@ export class Mt5Service {
           status: 'CLOSED',
         },
       });
+      this.observability.markOrderCreated('mt5');
 
       // Also update account balance/equity with latest values
       await this.prisma.tradingAccount.update({
@@ -111,10 +118,12 @@ export class Mt5Service {
         'code' in error &&
         error.code === 'P2002'
       ) {
+        this.observability.markOrderRejected('mt5_conflict_duplicate_ticket');
         throw new ConflictException(
           `Trade with ticket ${dto.ticket} already exists for this account`,
         );
       }
+      this.observability.markApiError('mt5', 'process_trade_failed');
       throw error;
     }
   }

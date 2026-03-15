@@ -70,6 +70,42 @@ export const mt5Api = {
     return mt5Fetch('/api/mt5/status');
   },
 
+  /** Place a market/limit/stop order */
+  placeOrder: async (params: {
+    symbol: string;
+    direction: 'BUY' | 'SELL';
+    volume: number;
+    price?: number;
+    sl?: number;
+    tp?: number;
+    slippage?: number;
+    magic?: number;
+    comment?: string;
+  }): Promise<{ success: boolean; data?: Record<string, unknown> }> => {
+    return mt5Fetch('/api/mt5/order', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
+  /** Close a position by ticket */
+  closePosition: async (ticket: number, volume?: number): Promise<{ success: boolean; data?: Record<string, unknown> }> => {
+    const params = new URLSearchParams();
+    if (volume) params.set('volume', String(volume));
+    const qs = params.toString();
+    return mt5Fetch(`/api/mt5/order/${ticket}${qs ? `?${qs}` : ''}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /** Modify SL/TP of an existing position */
+  modifyPosition: async (ticket: number, sl?: number, tp?: number): Promise<{ success: boolean; data?: Record<string, unknown> }> => {
+    return mt5Fetch(`/api/mt5/order/${ticket}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ sl, tp }),
+    });
+  },
+
   /** Health check */
   health: async () => {
     return mt5Fetch('/health');

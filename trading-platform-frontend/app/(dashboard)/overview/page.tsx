@@ -15,7 +15,6 @@ import {
     Wifi,
 } from 'lucide-react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -136,24 +135,24 @@ export default function OverviewPage() {
     const recentTrades = [...trades].sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()).slice(0, 5);
 
     return (
-        <div className="space-y-6">
+        <div className="mx-auto w-full max-w-370 space-y-8">
             {/* Page header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-                    <p className="text-muted-foreground">
+                    <h1 className="text-3xl font-semibold leading-tight tracking-[-0.01em] md:text-4xl">Dashboard</h1>
+                    <p className="mt-1.5 text-sm text-muted-foreground md:text-[15px]">
                         Welcome back! Here&apos;s your trading overview.
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2.5">
                     <Link href="/backtesting">
-                        <Button className="gap-2">
+                        <Button className="h-10 gap-2 rounded-xl px-4">
                             <PlayCircle className="h-4 w-4" />
                             New Backtest
                         </Button>
                     </Link>
                     <Link href="/journal">
-                        <Button variant="outline" className="gap-2">
+                        <Button variant="outline" className="h-10 gap-2 rounded-xl px-4">
                             <BookOpen className="h-4 w-4" />
                             Log Trade
                         </Button>
@@ -165,117 +164,88 @@ export default function OverviewPage() {
             <ForexSessionIndicator />
 
             {/* Stats cards */}
-            <motion.div
-                className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-                initial="hidden"
-                animate="show"
-                variants={{
-                    hidden: { opacity: 0 },
-                    show: {
-                        opacity: 1,
-                        transition: { staggerChildren: 0.1 }
-                    }
-                }}
-            >
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 {statsCards.map((stat) => (
-                    <motion.div
-                        key={stat.title}
-                        variants={{
-                            hidden: { opacity: 0, y: 20 },
-                            show: { opacity: 1, y: 0 }
-                        }}
-                        whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                    >
-                        <Card className="card-hover h-full">
-                            <CardContent className="p-6">
-                                <div className="flex items-center justify-between">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">{stat.title}</p>
-                                        <p className={`text-2xl font-bold ${stat.positive ? 'text-profit' : 'text-loss'}`}>
-                                            {stat.value}
-                                        </p>
-                                    </div>
-                                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.positive ? 'bg-profit' : 'bg-loss'}`}>
-                                        <stat.icon className={`h-6 w-6 ${stat.positive ? 'text-profit' : 'text-loss'}`} style={{ filter: 'brightness(0.8)' }} />
-                                    </div>
+                    <Card key={stat.title} className="h-full">
+                        <CardContent className="p-5 md:p-6">
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-1">
+                                    <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/90">{stat.title}</p>
+                                    <p className={`text-3xl font-semibold leading-none ${stat.positive ? 'text-profit' : 'text-loss'}`}>
+                                        {stat.value}
+                                    </p>
                                 </div>
-                                <div className="mt-3 flex items-center gap-1 text-xs">
-                                    {stat.positive ? (
-                                        <ArrowUpRight className="h-3 w-3 text-profit" />
-                                    ) : (
-                                        <ArrowDownRight className="h-3 w-3 text-loss" />
-                                    )}
-                                    <span className="text-muted-foreground">{stat.change}</span>
+                                <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${stat.positive ? 'bg-profit/20' : 'bg-loss/20'}`}>
+                                    <stat.icon className={`h-5 w-5 ${stat.positive ? 'text-profit' : 'text-loss'}`} />
                                 </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
+                            </div>
+                            <div className="mt-4 flex items-center gap-1.5 text-xs">
+                                {stat.positive ? (
+                                    <ArrowUpRight className="h-3.5 w-3.5 text-profit" />
+                                ) : (
+                                    <ArrowDownRight className="h-3.5 w-3.5 text-loss" />
+                                )}
+                                <span className="text-muted-foreground">{stat.change}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
                 ))}
-            </motion.div>
+            </div>
 
             {/* Quick stats row */}
-            <motion.div
-                className="grid gap-4 sm:grid-cols-3"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-            >
-                <motion.div whileHover={{ y: -2 }}>
+            <div className="grid gap-5 sm:grid-cols-3">
+                <div>
                     <Card>
-                        <CardContent className="p-6 flex items-center gap-4">
+                        <CardContent className="flex items-center gap-4 p-5 md:p-6">
                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                                 <TrendingUp className="h-5 w-5 text-primary" />
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground">Best Trade</p>
+                                <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Best Trade</p>
                                 <p className="text-lg font-semibold text-profit">
                                     {formatCurrency(bestTrade)}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
-                </motion.div>
-                <motion.div whileHover={{ y: -2 }}>
+                </div>
+                <div>
                     <Card>
-                        <CardContent className="p-6 flex items-center gap-4">
+                        <CardContent className="flex items-center gap-4 p-5 md:p-6">
                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
                                 <TrendingDown className="h-5 w-5 text-destructive" />
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground">Worst Trade</p>
+                                <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Worst Trade</p>
                                 <p className="text-lg font-semibold text-loss">
                                     {formatCurrency(worstTrade)}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
-                </motion.div>
-                <motion.div whileHover={{ y: -2 }}>
+                </div>
+                <div>
                     <Card>
-                        <CardContent className="p-6 flex items-center gap-4">
+                        <CardContent className="flex items-center gap-4 p-5 md:p-6">
                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
                                 <BarChart3 className="h-5 w-5 text-warning" />
                             </div>
                             <div>
-                                <p className="text-sm text-muted-foreground">Max Drawdown</p>
+                                <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Max Drawdown</p>
                                 <p className="text-lg font-semibold text-loss">
                                     {formatPercent(maxDrawdown)}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
-                </motion.div>
-            </motion.div>
+                </div>
+            </div>
 
             {/* Live Open Positions — only visible when MT5 is connected and has open positions */}
             {mt5Status.authenticated && positions.length > 0 && (() => {
                 const totalUnrealized = positions.reduce((s, p) => s + p.profit, 0);
                 return (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.35 }}
-                    >
+                    <div>
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between pb-3">
                                 <div className="flex items-center gap-3">
@@ -306,7 +276,7 @@ export default function OverviewPage() {
                                         return (
                                             <div
                                                 key={pos.ticket}
-                                                className="rounded-xl border p-3 space-y-2 hover:bg-accent/30 transition-colors"
+                                                className="space-y-2 rounded-xl border border-border/80 bg-card/80 p-3 transition-smooth hover:border-primary/35 hover:bg-accent/35"
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
@@ -337,18 +307,14 @@ export default function OverviewPage() {
                                 </div>
                             </CardContent>
                         </Card>
-                    </motion.div>
+                    </div>
                 );
             })()}
 
             {/* Recent trades */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-            >
+            <div>
                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
+                    <CardHeader className="flex flex-row items-center justify-between pb-4">
                         <CardTitle>Recent Trades</CardTitle>
                         <Link href="/journal">
                             <Button variant="ghost" size="sm">
@@ -356,7 +322,7 @@ export default function OverviewPage() {
                             </Button>
                         </Link>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="pt-0">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -383,7 +349,7 @@ export default function OverviewPage() {
                                         </TableCell>
                                     </TableRow>
                                 ) : recentTrades.map((trade) => (
-                                    <TableRow key={trade.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                                    <TableRow key={trade.id} className="cursor-pointer hover:bg-accent/50">
                                         <TableCell className="font-semibold">{trade.symbol}</TableCell>
                                         <TableCell>
                                             <Badge
@@ -414,7 +380,7 @@ export default function OverviewPage() {
                         </Table>
                     </CardContent>
                 </Card>
-            </motion.div>
+            </div>
         </div>
     );
 }

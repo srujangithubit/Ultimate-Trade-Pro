@@ -13,6 +13,7 @@ model User {
   passwordHash String? @map("password_hash")
   displayName String? @map("display_name")
   isVerified Boolean @default(false) @map("is_verified")
+  reputationScore Int @default(0) @map("reputation_score")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -23,6 +24,18 @@ model User {
   playbooks Playbook[]
   trades Trade[]
   backtestingSessions BacktestingSession[]
+  communityPosts CommunityPost[]
+  postLikes PostLike[]
+  postComments PostComment[]
+  commentLikes CommentLike[]
+  chatMessages ChatMessage[]
+  reputationEvents ReputationEvent[]
+  savedPosts SavedPost[]
+  followers UserFollow[] @relation("Following")
+  following UserFollow[] @relation("Followers")
+  syncGroups      SyncGroup[]
+  masterAccounts  MasterAccount[]
+  slaveAccounts   SlaveAccount[]
 
   @@map("users")
 }
@@ -184,12 +197,28 @@ model Trade {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   screenshots TradeScreenshot[]
+  journal TradeJournal?
 
   @@unique([accountId, ticket])
   @@index([userId, entryDate(sort: Desc)])
   @@index([symbol])
   @@index([accountId, entryDate(sort: Desc)])
   @@map("trades")
+}
+
+model TradeJournal {
+  id String @id @default(uuid()) @db.Uuid
+  tradeId String @unique @map("trade_id") @db.Uuid
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  tradeIdea String? @map("trade_idea")
+  mistakes String?
+  emotion String?
+  lessonsLearned String? @map("lessons_learned")
+  executionScore Int? @map("execution_score")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("trade_journal")
 }
 
 model TradeScreenshot {
@@ -203,22 +232,19 @@ model TradeScreenshot {
   @@map("trade_screenshots")
 }
 
-// TimescaleDB Hypertable
 model MarketDataCandle {
-  time DateTime
-  symbol String
+  id         String   @id @default(uuid())
+  symbol     String
   resolution String
-  open Decimal @db.Decimal(18, 8)
-  high Decimal @db.Decimal(18, 8)
-  low Decimal @db.Decimal(18, 8)
-  close Decimal @db.Decimal(18, 8)
-  volume BigInt
-  vwap Decimal? @db.Decimal(18, 8)
-  trades BigInt?
+  time       DateTime
+  open       Decimal  @db.Decimal(18,8)
+  high       Decimal  @db.Decimal(18,8)
+  low        Decimal  @db.Decimal(18,8)
+  close      Decimal  @db.Decimal(18,8)
+  volume     Decimal  @db.Decimal(18,8)
 
-  @@unique([time, symbol, resolution])
-  @@index([symbol, time(sort: Desc)])
-  @@map("market_data_candles")
+  @@unique([symbol, resolution, time])
+  @@index([symbol, resolution, time])
 }
 
 model ChartDrawing {
@@ -232,4 +258,373 @@ model ChartDrawing {
 
   @@index([sessionId])
   @@map("chart_drawings")
+}
+
+// ─── Community Models ────────────────────────────────────────────
+
+enum PostType {
+  TRADE_IDEA
+  ANALYSIS
+  FORECAST
+  JOURNAL
+  DISCUSSION
+}
+
+enum Direction {
+  BULLISH
+  BEARISH
+  NEUTRAL
+}
+
+enum RoomType {
+  GLOBAL
+  SYMBOL
+  PRIVATE
+}
+
+enum ReputationAction {
+  POST_CREATED
+  POST_LIKED
+  COMMENT_CREATED
+  POST_SHARED
+  FOLLOWED
+}
+
+model CommunityPost {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          PostType
+  symbol        String
+  timeframe     String
+  direction     Direction
+  entry         Decimal?  @db.Decimal(18, 8)
+  sl            Decimal?  @db.Decimal(18, 8)
+  tp            Decimal?  @db.Decimal(18, 8)
+  description   String    @db.Text
+  imageUrl      String?   @map("image_url")
+  chartStateId  String?   @unique @map("chart_state_id") @db.Uuid
+  chartSnapshot ChartSnapshot?
+  likesCount    Int       @default(0) @map("likes_count")
+  commentsCount Int       @default(0) @map("comments_count")
+  trendingScore Float     @default(0) @map("trending_score")
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  likes    PostLike[]
+  comments PostComment[]
+  saves    SavedPost[]
+
+  @@index([symbol, createdAt])
+  @@index([trendingScore(sort: Desc)])
+  @@index([userId, createdAt])
+  @@map("community_posts")
+}
+
+model ChartSnapshot {
+  id               String  @id @default(uuid()) @db.Uuid
+  postId           String  @unique @map("post_id") @db.Uuid
+  post             CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  symbol           String
+  timeframe        String
+  visibleRangeFrom BigInt  @map("visible_range_from")
+  visibleRangeTo   BigInt  @map("visible_range_to")
+  drawings         Json    @default("[]")
+  indicators       Json    @default("[]")
+  priceScaleMode   Int     @default(0) @map("price_scale_mode")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("chart_snapshots")
+}
+
+model PostLike {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId String @map("post_id") @db.Uuid
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("post_likes")
+}
+
+model PostComment {
+  id        String    @id @default(uuid()) @db.Uuid
+  postId    String    @map("post_id") @db.Uuid
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId  String?   @map("parent_id") @db.Uuid
+  parent    PostComment? @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   PostComment[] @relation("CommentThread")
+  content   String    @db.VarChar(2000)
+  likesCount Int      @default(0) @map("likes_count")
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  commentLikes CommentLike[]
+
+  @@index([postId, createdAt])
+  @@index([parentId])
+  @@map("post_comments")
+}
+
+model CommentLike {
+  id        String @id @default(uuid()) @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commentId String @map("comment_id") @db.Uuid
+  comment   PostComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@map("comment_likes")
+}
+
+model ChatRoom {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  type      RoomType
+  symbol    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  messages ChatMessage[]
+
+  @@unique([symbol])
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  roomId    String   @map("room_id") @db.Uuid
+  room      ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String   @db.VarChar(2000)
+  fileUrl   String?  @map("file_url")
+  reactions Json     @default("{}")
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([roomId, createdAt])
+  @@map("chat_messages")
+}
+
+model ReputationEvent {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action      ReputationAction
+  points      Int
+  referenceId String?          @map("reference_id")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("reputation_events")
+}
+
+model SavedPost {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId String @map("post_id") @db.Uuid
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("saved_posts")
+}
+
+model UserFollow {
+  id          String @id @default(uuid()) @db.Uuid
+  followerId  String @map("follower_id") @db.Uuid
+  follower    User   @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String @map("following_id") @db.Uuid
+  following   User   @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("user_follows")
+}
+
+// ─── Trade Sync Models ───────────────────────────────────────────
+
+enum SyncGroupStatus {
+  ACTIVE
+  PAUSED
+  STOPPED
+  ERROR
+}
+
+enum SlaveStatus {
+  ACTIVE
+  PAUSED
+  STOPPED
+  KILLED
+  ERROR
+}
+
+enum ReplicationEventType {
+  TRADE_OPEN
+  TRADE_CLOSE
+  TRADE_MODIFY
+  PARTIAL_CLOSE
+  SL_MODIFY
+  TP_MODIFY
+}
+
+enum ReplicationStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
+  KILLED
+}
+
+model SyncGroup {
+  id                String          @id @default(uuid()) @db.Uuid
+  userId            String          @map("user_id") @db.Uuid
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  status            SyncGroupStatus @default(ACTIVE)
+  masterAccount     MasterAccount?
+  slaveAccounts     SlaveAccount[]
+  replicationEvents ReplicationEvent[]
+  auditLogs         SyncAuditLog[]
+  totalSlaves       Int             @default(0) @map("total_slaves")
+  activeSlavesCount Int             @default(0) @map("active_slaves_count")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@map("sync_groups")
+}
+
+model MasterAccount {
+  id                     String                 @id @default(uuid()) @db.Uuid
+  syncGroupId            String                 @unique @map("sync_group_id") @db.Uuid
+  syncGroup              SyncGroup              @relation(fields: [syncGroupId], references: [id], onDelete: Cascade)
+  userId                 String                 @map("user_id") @db.Uuid
+  user                   User                   @relation(fields: [userId], references: [id])
+  accountNumber          String                 @map("account_number")
+  brokerName             String                 @map("broker_name")
+  serverName             String                 @map("server_name")
+  displayName            String                 @map("display_name")
+  isConnected            Boolean                @default(false) @map("is_connected")
+  lastHeartbeat          DateTime?              @map("last_heartbeat")
+  equity                 Decimal                @default(0) @db.Decimal(18, 2)
+  balance                Decimal                @default(0) @db.Decimal(18, 2)
+  floatingPnL            Decimal                @default(0) @map("floating_pnl") @db.Decimal(18, 2)
+  totalReplicatedTrades  Int                    @default(0) @map("total_replicated_trades")
+  equitySnapshots        MasterEquitySnapshot[]
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("master_accounts")
+}
+
+model SlaveAccount {
+  id                           String                @id @default(uuid()) @db.Uuid
+  syncGroupId                  String                @map("sync_group_id") @db.Uuid
+  syncGroup                    SyncGroup             @relation(fields: [syncGroupId], references: [id], onDelete: Cascade)
+  userId                       String                @map("user_id") @db.Uuid
+  user                         User                  @relation(fields: [userId], references: [id])
+  accountNumber                String                @map("account_number")
+  brokerName                   String                @map("broker_name")
+  serverName                   String                @map("server_name")
+  displayName                  String                @map("display_name")
+  status                       SlaveStatus           @default(ACTIVE)
+  isConnected                  Boolean               @default(false) @map("is_connected")
+  lastHeartbeat                DateTime?             @map("last_heartbeat")
+  equity                       Decimal               @default(0) @db.Decimal(18, 2)
+  balance                      Decimal               @default(0) @db.Decimal(18, 2)
+  floatingPnL                  Decimal               @default(0) @map("floating_pnl") @db.Decimal(18, 2)
+  riskConfig                   Json                  @map("risk_config")
+  symbolFilters                String[]              @map("symbol_filters")
+  maxDailyDrawdownPct          Decimal               @default(5.00) @map("max_daily_drawdown_pct") @db.Decimal(5, 2)
+  currentDailyDrawdownPct      Decimal               @default(0) @map("current_daily_drawdown_pct") @db.Decimal(5, 2)
+  killSwitchTriggered          Boolean               @default(false) @map("kill_switch_triggered")
+  totalReplicatedTrades        Int                   @default(0) @map("total_replicated_trades")
+  totalSuccessfulReplications  Int                   @default(0) @map("total_successful_replications")
+  totalFailedReplications      Int                   @default(0) @map("total_failed_replications")
+  replicationEvents            ReplicationEvent[]
+  equitySnapshots              SlaveEquitySnapshot[]
+  createdAt                    DateTime              @default(now()) @map("created_at")
+  updatedAt                    DateTime              @updatedAt @map("updated_at")
+
+  @@unique([syncGroupId, accountNumber])
+  @@index([syncGroupId, status])
+  @@map("slave_accounts")
+}
+
+model ReplicationEvent {
+  id              String                @id @default(uuid()) @db.Uuid
+  syncGroupId     String                @map("sync_group_id") @db.Uuid
+  syncGroup       SyncGroup             @relation(fields: [syncGroupId], references: [id])
+  masterId        String                @map("master_id")
+  slaveId         String                @map("slave_id") @db.Uuid
+  slaveAccount    SlaveAccount          @relation(fields: [slaveId], references: [id])
+  eventType       ReplicationEventType  @map("event_type")
+  status          ReplicationStatus     @default(PENDING)
+  masterTicket    String                @map("master_ticket")
+  slaveTicket     String?               @map("slave_ticket")
+  masterSymbol    String                @map("master_symbol")
+  masterVolume    Decimal               @map("master_volume") @db.Decimal(18, 8)
+  masterPrice     Decimal               @map("master_price") @db.Decimal(18, 5)
+  masterSL        Decimal?              @map("master_sl") @db.Decimal(18, 5)
+  masterTP        Decimal?              @map("master_tp") @db.Decimal(18, 5)
+  masterSide      String                @map("master_side")
+  adjustedVolume  Decimal?              @map("adjusted_volume") @db.Decimal(18, 8)
+  skipReason      String?               @map("skip_reason")
+  errorMessage    String?               @map("error_message")
+  latencyMs       Int?                  @map("latency_ms")
+  initiatedAt     DateTime              @default(now()) @map("initiated_at")
+  executedAt      DateTime?             @map("executed_at")
+
+  @@index([syncGroupId, initiatedAt(sort: Desc)])
+  @@index([slaveId, status])
+  @@index([masterTicket])
+  @@map("replication_events")
+}
+
+model SyncAuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  syncGroupId String    @map("sync_group_id") @db.Uuid
+  syncGroup   SyncGroup @relation(fields: [syncGroupId], references: [id])
+  userId      String    @map("user_id")
+  action      String
+  details     Json
+  performedBy String    @map("performed_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([syncGroupId, createdAt(sort: Desc)])
+  @@map("sync_audit_logs")
+}
+
+model SlaveEquitySnapshot {
+  id           String       @id @default(uuid()) @db.Uuid
+  slaveId      String       @map("slave_id") @db.Uuid
+  slaveAccount SlaveAccount @relation(fields: [slaveId], references: [id], onDelete: Cascade)
+  equity       Decimal      @db.Decimal(18, 2)
+  balance      Decimal      @db.Decimal(18, 2)
+  floatingPnL  Decimal      @map("floating_pnl") @db.Decimal(18, 2)
+  drawdownPct  Decimal      @map("drawdown_pct") @db.Decimal(5, 2)
+  snapshotAt   DateTime     @default(now()) @map("snapshot_at")
+
+  @@index([slaveId, snapshotAt(sort: Desc)])
+  @@map("slave_equity_snapshots")
+}
+
+model MasterEquitySnapshot {
+  id            String        @id @default(uuid()) @db.Uuid
+  masterId      String        @map("master_id") @db.Uuid
+  masterAccount MasterAccount @relation(fields: [masterId], references: [id], onDelete: Cascade)
+  equity        Decimal       @db.Decimal(18, 2)
+  balance       Decimal       @db.Decimal(18, 2)
+  floatingPnL   Decimal       @map("floating_pnl") @db.Decimal(18, 2)
+  snapshotAt    DateTime      @default(now()) @map("snapshot_at")
+
+  @@index([masterId, snapshotAt(sort: Desc)])
+  @@map("master_equity_snapshots")
 }

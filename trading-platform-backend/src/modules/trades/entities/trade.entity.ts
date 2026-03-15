@@ -11,10 +11,10 @@ export class Trade {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column('uuid')
   userId: string;
 
-  @Column({ nullable: true })
+  @Column('uuid', { nullable: true })
   accountId: string;
 
   @Column()

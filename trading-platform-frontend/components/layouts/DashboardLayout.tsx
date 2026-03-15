@@ -19,6 +19,7 @@ import {
     Sun,
     Bell,
     Search,
+    FileText,
     TrendingUp,
     UserCircle,
     User,
@@ -26,6 +27,10 @@ import {
     HelpCircle,
     Keyboard,
     Newspaper,
+    LineChart,
+    Users,
+    Repeat2,
+    ClipboardCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -42,16 +47,22 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUserPreferences } from '@/lib/stores/userPreferencesStore';
 import CommandPalette from './CommandPalette';
+import TradingGridBackground from '@/components/3d/backgrounds/TradingGridBackground';
 
 const navigation = [
     { name: 'Overview', href: '/overview', icon: LayoutDashboard },
+    { name: 'Charts', href: '/charts', icon: LineChart },
     { name: 'Accounts', href: '/accounts', icon: UserCircle },
     { name: 'Backtesting', href: '/backtesting', icon: PlayCircle },
+    { name: 'Trade Analysis', href: '/trade-analysis', icon: FileText },
     { name: 'Journal', href: '/journal', icon: BookOpen },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Playbooks', href: '/playbooks', icon: BookMarked },
+    { name: 'Checklist', href: '/checklist', icon: ClipboardCheck },
     { name: 'Calculators', href: '/calculators', icon: Calculator },
     { name: 'News', href: '/news', icon: Newspaper },
+    { name: 'Community', href: '/community', icon: Users },
+    { name: 'Trade Sync', href: '/trade-sync', icon: Repeat2 },
     { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -70,15 +81,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     return (
         <div className="flex h-full flex-col">
             {/* Logo */}
-            <div className="flex h-16 items-center gap-2 px-6 border-b border-border">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+            <div className="flex h-16 items-center gap-2 px-5 border-b border-border">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary shadow-[0_4px_18px_rgba(10,108,255,0.34)]">
                     <TrendingUp className="h-4 w-4 text-primary-foreground" />
                 </div>
-                <span className="text-lg font-bold gradient-text">TradePro</span>
+                <span className="text-lg font-bold gradient-text whitespace-nowrap opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">TradePro</span>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 space-y-1 px-3 py-4">
+            <nav className="flex-1 space-y-1 px-2 py-4">
                 {navigation.map((item) => {
                     const isActive = pathname?.startsWith(item.href);
                     return (
@@ -86,18 +97,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                             key={item.name}
                             href={item.href}
                             onClick={onNavigate}
+                            title={item.name}
                             className={`
                 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-smooth
                 ${isActive
-                                    ? 'bg-primary text-primary-foreground shadow-md'
-                                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                    ? 'bg-[linear-gradient(90deg,rgba(8,95,238,0.22),rgba(8,95,238,0.08))] text-[#d8e9ff] border border-[#1768e6]/55 shadow-[0_0_0_1px_rgba(8,95,238,0.18),0_8px_22px_rgba(6,27,66,0.35)]'
+                                    : 'text-muted-foreground border border-transparent hover:bg-[rgba(13,23,42,0.9)] hover:text-[#d8e9ff] hover:border-[#06f] hover:shadow-[0_0_0_2px_rgba(0,102,255,0.28),0_12px_30px_rgba(0,102,255,0.3)]'
                                 }
               `}
                         >
-                            <item.icon className="h-5 w-5" />
-                            {item.name}
+                            <item.icon className="h-5 w-5 shrink-0" />
+                            <span className="whitespace-nowrap opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">{item.name}</span>
                             {item.name === 'Backtesting' && (
-                                <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0">
+                                <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 opacity-0 hidden group-hover/sidebar:opacity-100 group-hover/sidebar:inline-flex transition-opacity duration-200">
                                     Beta
                                 </Badge>
                             )}
@@ -107,26 +119,29 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </nav>
 
             {/* Theme toggle + User */}
-            <div className="border-t border-border p-4 space-y-3">
+            <div className="border-t border-border p-3 space-y-2">
                 <button
                     onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    title={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-smooth"
                 >
                     {mounted ? (
                         <>
-                            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                            {theme === 'dark' ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+                            <span className="whitespace-nowrap opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">
+                                {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                            </span>
                         </>
                     ) : (
                         <>
-                            <Sun className="h-4 w-4" />
-                            <span>Light Mode</span>
+                            <Sun className="h-4 w-4 shrink-0" />
+                            <span className="whitespace-nowrap opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">Light Mode</span>
                         </>
                     )}
                 </button>
 
                 <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-                    <Avatar className="h-8 w-8">
+                    <Avatar className="h-8 w-8 shrink-0">
                         {avatarUrl && <AvatarImage src={avatarUrl} alt="User avatar" />}
                         <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
                             {user?.displayName
@@ -134,7 +149,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                                 : ((user?.firstName?.[0] || 'G') + (user?.lastName?.[0] || 'U')).toUpperCase()}
                         </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 opacity-0 w-0 overflow-hidden group-hover/sidebar:opacity-100 group-hover/sidebar:w-auto transition-all duration-200">
                         <p className="text-sm font-medium truncate">
                             {user?.displayName || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'Guest User')}
                         </p>
@@ -142,7 +157,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     </div>
                     <button
                         onClick={logout}
-                        className="text-muted-foreground hover:text-foreground transition-smooth"
+                        className="text-muted-foreground hover:text-foreground transition-smooth opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200"
                     >
                         <LogOut className="h-4 w-4" />
                     </button>
@@ -153,6 +168,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    const pathname = usePathname();
+    const isChartsPage = pathname === '/charts';
     const [mobileOpen, setMobileOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
     const { avatarUrl } = useUserPreferences();
@@ -178,15 +195,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="flex h-screen bg-background">
-            {/* Desktop Sidebar */}
-            <aside className="hidden md:flex md:w-64 md:flex-col border-r border-border bg-sidebar">
+            {/* 3D animated background — renders behind all content */}
+            <TradingGridBackground />
+
+            {/* Desktop Sidebar — icons only, expands on hover */}
+            <aside className="hidden md:flex md:flex-col border-r border-border bg-sidebar w-17 hover:w-64 transition-all duration-300 ease-in-out group/sidebar overflow-hidden">
                 <SidebarContent />
             </aside>
 
             {/* Main Content */}
             <div className="flex flex-1 flex-col overflow-hidden">
                 {/* Top bar — mobile */}
-                <header className="flex h-14 items-center gap-4 border-b border-border bg-background px-4 md:px-6">
+                <header className="flex h-14 items-center gap-4 border-b border-border bg-background/85 backdrop-blur-md px-4 md:px-6">
                     {/* Mobile menu */}
                     <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                         <SheetTrigger asChild className="md:hidden">
@@ -203,7 +223,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="flex-1 md:max-w-md">
                         <button
                             onClick={() => setSearchOpen(true)}
-                            className="flex w-full items-center gap-2 rounded-lg border border-input bg-background py-2 pl-3 pr-2 text-sm text-muted-foreground hover:bg-accent/50 transition-colors"
+                            className="flex w-full items-center gap-2 rounded-xl border border-input bg-background/90 py-2 pl-3 pr-2 text-sm text-muted-foreground hover:bg-accent/70 hover:border-[#1d4f95] transition-colors"
                         >
                             <Search className="h-4 w-4 shrink-0" />
                             <span className="flex-1 text-left">Search trades, instruments...</span>
@@ -350,7 +370,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </header>
 
                 {/* Page content */}
-                <main className="flex-1 overflow-y-auto p-4 md:p-6">
+                <main className={`flex-1 overflow-y-auto ${isChartsPage ? '' : 'p-4 md:p-6'}`}>
                     {children}
                 </main>
 

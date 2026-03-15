@@ -1,6 +1,5 @@
---- Starting Test for user_lg_1771148849528@example.com ---
+--- Starting Test for user_lg_1773548314329@example.com ---
 [Register] Status: 201
 [Register] Success. Token: eyJhbGciOi...
-[Trade] Status: 400
-[Trade] Failed body: {"message":["accountId should not be empty","accountId must be a UUID"],"error":"Bad Request","statusCode":400}
-[Trade] Error: Trade failed
+[Trade] Status: 201
+[Trade] Success. ID: 83d2e050-18c2-435e-83a6-722725e157c9

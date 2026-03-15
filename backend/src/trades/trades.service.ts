@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -12,6 +13,10 @@ export class TradesService {
   constructor(private prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateTradeDto) {
+    if (dto.entryPrice <= 0) {
+      throw new BadRequestException('Invalid entry price');
+    }
+
     // If exit price is provided, calculate PnL and set status to CLOSED
     let status = 'OPEN';
     let pnlGross: number | null = null;

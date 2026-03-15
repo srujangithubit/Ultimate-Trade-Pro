@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Table,
@@ -53,7 +54,7 @@ function WinRateBar({ winRate }: { winRate: number }) {
     );
 }
 
-export default function SummaryWeek({ data }: SummaryWeekProps) {
+function SummaryWeek({ data }: SummaryWeekProps) {
     // Filter to only days with trades
     const activeDays = (data || []).filter(d => d.totalTrades > 0);
 
@@ -129,3 +130,5 @@ export default function SummaryWeek({ data }: SummaryWeekProps) {
         </Card>
     );
 }
+
+export default memo(SummaryWeek);

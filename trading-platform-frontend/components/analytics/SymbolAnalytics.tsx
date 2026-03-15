@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Info } from 'lucide-react';
 import {
@@ -9,10 +10,10 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer,
     ReferenceLine,
     Cell
 } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import { formatCurrency } from '@/lib/utils/formatters';
 import { AnimatedHorizontalBar } from '@/components/ui/animated-bar';
 
@@ -28,7 +29,7 @@ interface SymbolAnalyticsProps {
     data: SymbolStats[];
 }
 
-export default function SymbolAnalytics({ data }: SymbolAnalyticsProps) {
+function SymbolAnalytics({ data }: SymbolAnalyticsProps) {
     if (!data || data.length === 0) {
         return null;
     }
@@ -60,7 +61,7 @@ export default function SymbolAnalytics({ data }: SymbolAnalyticsProps) {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[400px] w-full">
+                    <div className="h-100 w-full">
                         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <BarChart
                                 data={topSymbolsByCount}
@@ -122,7 +123,7 @@ export default function SymbolAnalytics({ data }: SymbolAnalyticsProps) {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[400px] w-full">
+                    <div className="h-100 w-full">
                         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <BarChart
                                 data={topSymbolsByPnl}
@@ -190,3 +191,5 @@ export default function SymbolAnalytics({ data }: SymbolAnalyticsProps) {
         </div>
     );
 }
+
+export default memo(SymbolAnalytics);

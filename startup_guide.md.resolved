@@ -1,0 +1,78 @@
+# TradePro — Production Startup Guide
+
+## Prerequisites
+- Node.js, npm, Python installed
+- Docker Desktop running (for PostgreSQL & Redis)
+- MT5 Terminal open (for live trading features)
+
+---
+
+## Step 1: Start Infrastructure (Docker)
+
+```powershell
+cd "C:\Users\sruja.SUNNULINGEGOWDA\Desktop\Backtesting"
+docker-compose up -d postgres redis
+```
+
+This starts **PostgreSQL** (port `5433`) and **Redis** (port `6379`).
+
+---
+
+## Step 2: Build & Start Backend — NestJS API (port 3000)
+
+```powershell
+cd "C:\Users\sruja.SUNNULINGEGOWDA\Desktop\Backtesting\backend"
+npm run build
+node dist/src/main
+```
+
+> [!NOTE]
+> The `start:prod` script in package.json uses `node dist/main`, but the actual compiled output is at `dist/src/main.js`. Use `node dist/src/main` directly.
+
+---
+
+## Step 3: Build & Start Frontend — Next.js (port 3002)
+
+```powershell
+cd "C:\Users\sruja.SUNNULINGEGOWDA\Desktop\Backtesting\trading-platform-frontend"
+npm run build
+npx next start --port 3002
+```
+
+---
+
+## Step 4: Start MT5 Node.js Bridge (port 3001)
+
+```powershell
+cd "C:\Users\sruja.SUNNULINGEGOWDA\Desktop\Backtesting\mt5-server"
+npm start
+```
+
+---
+
+## Step 5: Start Python MT5 Bridge (port 8765)
+
+```powershell
+cd "C:\Users\sruja.SUNNULINGEGOWDA\Desktop\Backtesting\mt5-server\python-bridge"
+python websocket_server.py
+```
+
+---
+
+## Access
+
+| Service | URL |
+|---------|-----|
+| **Website** | http://localhost:3002 |
+| **API** | http://localhost:3000 |
+| **MT5 REST** | http://localhost:3001/api/mt5 |
+| **MT5 WebSocket** | ws://localhost:3001/ws/mt5 |
+| **Python Bridge** | ws://localhost:8765 |
+
+## Optional: Monitoring (Prometheus + Grafana)
+
+```powershell
+cd "C:\Users\sruja.SUNNULINGEGOWDA\Desktop\Backtesting"
+docker-compose up -d prometheus grafana
+```
+- Grafana: http://localhost:3003 (admin / admin)

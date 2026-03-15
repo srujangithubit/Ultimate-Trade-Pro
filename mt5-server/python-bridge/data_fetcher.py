@@ -22,8 +22,24 @@ TIMEFRAME_MAP = {
 }
 
 
+def _ensure_mt5_initialized() -> bool:
+    """Ensure the MT5 module is initialized. Re-initialize if needed."""
+    info = mt5.terminal_info()
+    if info is not None:
+        return True
+    logger.warning("MT5 not initialized, attempting to initialize...")
+    if mt5.initialize():
+        logger.info("MT5 re-initialized successfully")
+        return True
+    logger.error("MT5 initialization failed: %s", mt5.last_error())
+    return False
+
+
 def get_ohlcv(symbol: str, timeframe: str, bars: int = 100) -> list[dict]:
     """Fetch OHLCV candle data for a given symbol and timeframe."""
+    if not _ensure_mt5_initialized():
+        return []
+
     tf = TIMEFRAME_MAP.get(timeframe)
     if tf is None:
         logger.error("Invalid timeframe: %s", timeframe)
@@ -44,6 +60,9 @@ def get_ohlcv(symbol: str, timeframe: str, bars: int = 100) -> list[dict]:
 
 def get_ticks(symbol: str, count: int = 100) -> list[dict]:
     """Fetch recent ticks for a symbol."""
+    if not _ensure_mt5_initialized():
+        return []
+
     ticks = mt5.copy_ticks_from(
         symbol, datetime.now() - timedelta(minutes=5), count, mt5.COPY_TICKS_ALL
     )
@@ -54,6 +73,23 @@ def get_ticks(symbol: str, count: int = 100) -> list[dict]:
     df["time"] = pd.to_datetime(df["time"], unit="s")
 
     return df[["time", "bid", "ask", "last", "volume"]].to_dict(orient="records")
+
+
+def get_latest_tick(symbol: str) -> dict | None:
+    """Get the latest tick for a symbol using symbol_info_tick (real-time)."""
+    if not _ensure_mt5_initialized():
+        return None
+
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None:
+        return None
+    return {
+        "time": datetime.fromtimestamp(tick.time).isoformat(),
+        "bid": tick.bid,
+        "ask": tick.ask,
+        "last": tick.last,
+        "volume": tick.volume,
+    }
 
 
 def get_symbols(group: str = "*") -> list[str]:

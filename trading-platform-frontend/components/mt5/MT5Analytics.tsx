@@ -23,7 +23,6 @@ import {
     Flame,
 } from 'lucide-react';
 import {
-    ResponsiveContainer,
     AreaChart,
     Area,
     XAxis,
@@ -36,6 +35,7 @@ import {
     Pie,
     Cell,
 } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -237,7 +237,7 @@ function StatCard({ icon: Icon, label, value, color, subtext }: {
             <CardContent className="pt-5 pb-4 px-4">
                 <div className="flex items-start gap-3">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${color}`}>
-                        <Icon className="h-4 w-4" />
+                        {React.createElement(Icon as React.ElementType<{ className: string }>, { className: "h-4 w-4" })}
                     </div>
                     <div className="min-w-0">
                         <p className="text-xs text-muted-foreground">{label}</p>
@@ -435,14 +435,42 @@ export default function MT5Analytics() {
                                             { name: 'Losses', value: stats.losingTrades },
                                         ]}
                                         cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={5} dataKey="value"
-                                        label={({ name, value }) => `${name}: ${value}`}
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        label={({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
+                                            const RADIAN = Math.PI / 180;
+                                            const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                            const x = cx + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
+                                            const y = cy + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
+                                            return (
+                                                <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={600}>
+                                                    {value}
+                                                </text>
+                                            );
+                                        }}
+                                        labelLine={false}
                                     >
                                         <Cell fill="#22c55e" />
                                         <Cell fill="#ef4444" />
                                     </Pie>
                                     <Tooltip contentStyle={{ backgroundColor: 'rgba(23,23,46,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px', color: '#e5e7eb' }} />
+                                    <text x="50%" y="45%" textAnchor="middle" dominantBaseline="central" className="fill-foreground" fontSize={22} fontWeight={700}>
+                                        {stats.winningTrades + stats.losingTrades}
+                                    </text>
+                                    <text x="50%" y="57%" textAnchor="middle" dominantBaseline="central" className="fill-muted-foreground" fontSize={12}>
+                                        Total Trades
+                                    </text>
                                 </PieChart>
                             </ResponsiveContainer>
+                        </div>
+                        <div className="flex justify-center gap-6 mt-2">
+                            <div className="flex items-center gap-2">
+                                <span className="h-3 w-3 rounded-full bg-green-500" />
+                                <span className="text-sm font-medium text-foreground">Wins: {stats.winningTrades}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="h-3 w-3 rounded-full bg-red-500" />
+                                <span className="text-sm font-medium text-foreground">Losses: {stats.losingTrades}</span>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

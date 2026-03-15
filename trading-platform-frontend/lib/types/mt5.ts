@@ -71,16 +71,16 @@ export interface MT5ConnectionStatus {
 
 export interface MT5WebSocketMessage {
   type:
-    | 'tick'
-    | 'account_info'
-    | 'positions'
-    | 'trade_history'
-    | 'auth'
-    | 'subscribed'
-    | 'heartbeat'
-    | 'status'
-    | 'error'
-    | 'mt5_error';
+  | 'tick'
+  | 'account_info'
+  | 'positions'
+  | 'trade_history'
+  | 'auth'
+  | 'subscribed'
+  | 'heartbeat'
+  | 'status'
+  | 'error'
+  | 'mt5_error';
   data?: unknown;
   symbol?: string;
   message?: string;
@@ -103,4 +103,17 @@ export interface MT5ContextValue {
   refreshAccount: () => void;
   refreshPositions: () => void;
   refreshTradeHistory: (days?: number) => void;
+  placeOrder: (params: {
+    symbol: string;
+    direction: 'BUY' | 'SELL';
+    volume: number;
+    price?: number;
+    sl?: number;
+    tp?: number;
+    slippage?: number;
+  }) => Promise<{ success: boolean; data?: Record<string, unknown> }>;
+  closePosition: (ticket: number, volume?: number) => Promise<{ success: boolean; data?: Record<string, unknown> }>;
+  modifyPosition: (ticket: number, sl?: number, tp?: number) => Promise<{ success: boolean; data?: Record<string, unknown> }>;
+  onTick: (symbol: string, callback: (tick: MT5TickData) => void) => void;
+  offTick: (symbol: string, callback: (tick: MT5TickData) => void) => void;
 }

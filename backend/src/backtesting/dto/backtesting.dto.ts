@@ -25,6 +25,14 @@ export class CreateSessionDto {
   @Min(0)
   startingBalance: number;
 
+  @IsString()
+  @IsOptional()
+  timeframe?: string;
+
+  @IsString()
+  @IsOptional()
+  timezone?: string;
+
   @IsDateString()
   startDate: string;
 
@@ -51,6 +59,7 @@ export class ExecuteOrderDto {
 
   @IsNumber()
   @IsOptional()
+  @Min(0.00000001)
   price?: number;
 
   @IsNumber()

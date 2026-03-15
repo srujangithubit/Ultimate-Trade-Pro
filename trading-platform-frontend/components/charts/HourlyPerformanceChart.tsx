@@ -7,10 +7,10 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer,
     Cell,
     ReferenceLine,
 } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils/formatters';
 
@@ -48,7 +48,7 @@ export function HourlyPerformanceChart({ data }: HourlyPerformanceChartProps) {
                                     borderColor: 'var(--border)',
                                     color: 'var(--foreground)',
                                 }}
-                                formatter={(value: number) => [formatCurrency(value), 'P&L']}
+                                formatter={(value: any) => [formatCurrency(Number(value) || 0), 'P&L']}
                             />
                             <ReferenceLine x={0} stroke="var(--border)" />
                             <Bar dataKey="value" radius={[0, 4, 4, 0]}>

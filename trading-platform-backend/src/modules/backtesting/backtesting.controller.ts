@@ -6,6 +6,7 @@ import {
   UseGuards,
   Get,
   Put,
+  Query,
 } from '@nestjs/common';
 import { BacktestingService } from './backtesting.service';
 import { CreateSessionDto } from './dto/create-session.dto';
@@ -35,6 +36,16 @@ export class BacktestingController {
   @Get('sessions/:id')
   getSession(@CurrentUser() user: any, @Param('id') id: string) {
     return this.backtestingService.getSession(id, user.id);
+  }
+
+  @Get('sessions/:id/candles')
+  async getSessionCandles(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Query('limit') limit?: string,
+  ) {
+    const defaultLimit = limit ? parseInt(limit, 10) : 500;
+    return this.backtestingService.getSessionCandles(id, user.id, defaultLimit);
   }
 
   @Get('sessions/:id/report')

@@ -2,7 +2,7 @@
 # Trading Platform - Local Development Stack
 # =============================================================================
 # Usage: docker-compose up -d
-# Dashboard: http://localhost:3000 (API) | http://localhost:3001 (Grafana)
+# Dashboard: http://localhost:3000 (API) | http://localhost:3003 (Grafana)
 
 services:
   # ---------------------------------------------------------------------------
@@ -25,13 +25,16 @@ services:
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
       - DATABASE_NAME=trading_platform
-      - JWT_SECRET=dev-jwt-secret-key
-      - JWT_REFRESH_SECRET=dev-refresh-secret-key
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET must be set}
+      - MT5_INTERNAL_API_KEY=${MT5_INTERNAL_API_KEY:?MT5_INTERNAL_API_KEY must be set}
       - JWT_EXPIRATION=15m
       - REFRESH_TOKEN_EXPIRATION=7d
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - FRONTEND_URL=http://localhost:3002
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://tempo:4318/v1/traces
     volumes:
       - ./backend/src:/app/src
     depends_on:
@@ -39,6 +42,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      tempo:
+        condition: service_started
     command: [ "npm", "run", "start:dev" ]
     restart: unless-stopped
     networks:
@@ -119,17 +124,190 @@ services:
     image: grafana/grafana:latest
     container_name: trading-grafana
     ports:
-      - "3001:3000"
+      - "3003:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./infrastructure/monitoring/grafana-dashboard.json:/etc/grafana/provisioning/dashboards/trading-platform.json
+      - ./infrastructure/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./infrastructure/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./infrastructure/monitoring/grafana-dashboard.json:/var/lib/grafana/dashboards/trading-platform.json
     depends_on:
       - prometheus
+      - loki
+      - tempo
     restart: unless-stopped
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # Loki (Log Storage)
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: trading-loki
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ./infrastructure/monitoring/loki-config.yml:/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # Tempo (Trace Storage)
+  # ---------------------------------------------------------------------------
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: trading-tempo
+    ports:
+      - "3200:3200"
+      - "4318:4318"
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./infrastructure/monitoring/tempo-config.yml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # Promtail (Log Collector)
+  # ---------------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: trading-promtail
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./infrastructure/monitoring/promtail-config.yml:/etc/promtail/config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # Node Exporter (Host Metrics)
+  # ---------------------------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: trading-node-exporter
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # Redis Exporter
+  # ---------------------------------------------------------------------------
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: trading-redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Exporter
+  # ---------------------------------------------------------------------------
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: trading-postgres-exporter
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:postgres@postgres:5432/trading_platform?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # Replay Determinism Monitor (Optional Daily Loop)
+  # ---------------------------------------------------------------------------
+  determinism-monitor:
+    image: node:20
+    container_name: replay-determinism-monitor
+    working_dir: /app/backend
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/trading_platform?schema=public
+      - REDIS_URL=redis://redis:6379
+      - MT5_INTERNAL_API_KEY=${MT5_INTERNAL_API_KEY:?MT5_INTERNAL_API_KEY must be set}
+      - DETERMINISM_REPORT_URL=http://api:3000/internal/observability/replay-determinism
+      - DETERMINISM_CANDLES=50000
+    command:
+      [
+        "sh",
+        "-c",
+        "npm ci && while true; do npm run determinism:monitor || true; sleep 86400; done",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # Financial Invariant Monitor (Optional 10-minute Loop)
+  # ---------------------------------------------------------------------------
+  financial-invariant-monitor:
+    image: node:20
+    container_name: financial-invariant-monitor
+    working_dir: /app/backend
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/trading_platform?schema=public
+      - REDIS_URL=redis://redis:6379
+      - MT5_INTERNAL_API_KEY=${MT5_INTERNAL_API_KEY:?MT5_INTERNAL_API_KEY must be set}
+      - FINANCIAL_INVARIANT_REPORT_URL=http://api:3000/internal/observability/financial-invariants
+      - FINANCIAL_INVARIANT_MONITOR_INTERVAL_SECONDS=${FINANCIAL_INVARIANT_MONITOR_INTERVAL_SECONDS:-600}
+      - FINANCIAL_INVARIANT_MAX_RISK_PERCENT=${FINANCIAL_INVARIANT_MAX_RISK_PERCENT:-2.0}
+      - FINANCIAL_INVARIANT_PNL_TOLERANCE=${FINANCIAL_INVARIANT_PNL_TOLERANCE:-1.0}
+      - FINANCIAL_INVARIANT_LOT_STEP=${FINANCIAL_INVARIANT_LOT_STEP:-0.01}
+      - FINANCIAL_INVARIANT_LOT_TOLERANCE=${FINANCIAL_INVARIANT_LOT_TOLERANCE:-0.0000001}
+      - FINANCIAL_INVARIANT_TRADE_SAMPLE_LIMIT=${FINANCIAL_INVARIANT_TRADE_SAMPLE_LIMIT:-5000}
+      - FINANCIAL_INVARIANT_TIMESTAMP_FUTURE_TOLERANCE_SECONDS=${FINANCIAL_INVARIANT_TIMESTAMP_FUTURE_TOLERANCE_SECONDS:-300}
+    command:
+      [
+        "sh",
+        "-c",
+        "npm ci && while true; do npm run financial:invariant:monitor || true; sleep ${FINANCIAL_INVARIANT_MONITOR_INTERVAL_SECONDS:-600}; done",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+    profiles:
+      - monitoring
     networks:
       - trading-network
 
@@ -144,6 +322,8 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  tempo_data:
     driver: local
 
 # =============================================================================

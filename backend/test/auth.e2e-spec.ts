@@ -161,7 +161,7 @@ describe('Auth API (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post('/auth/refresh')
         .send({
-          userId: user.id,
+          userId: user!.id,
           refreshToken: loginResponse.body.refreshToken,
         })
         .expect(200);

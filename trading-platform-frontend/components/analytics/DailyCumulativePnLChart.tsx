@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     AreaChart,
@@ -7,9 +8,9 @@ import {
     XAxis,
     YAxis,
     CartesianGrid,
-    Tooltip,
-    ResponsiveContainer
+    Tooltip
 } from 'recharts';
+import { ResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import { formatCurrency, formatDate } from '@/lib/utils/formatters';
 import { Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +39,7 @@ interface DailyCumulativePnLChartProps {
     stats: Stats;
 }
 
-export default function DailyCumulativePnLChart({ dailyData, stats }: DailyCumulativePnLChartProps) {
+function DailyCumulativePnLChart({ dailyData, stats }: DailyCumulativePnLChartProps) {
     // Calculate cumulative P&L
     let runningTotal = 0;
     const cumulativeData = dailyData.map(day => {
@@ -78,8 +79,8 @@ export default function DailyCumulativePnLChart({ dailyData, stats }: DailyCumul
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[300px] w-full mt-4">
-                        <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+                    <div className="h-75 w-full mt-4" style={{ minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height="100%" minHeight={300} debounce={50}>
                             <AreaChart data={cumulativeData}>
                                 <defs>
                                     <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
@@ -212,3 +213,5 @@ export default function DailyCumulativePnLChart({ dailyData, stats }: DailyCumul
         </div>
     );
 }
+
+export default memo(DailyCumulativePnLChart);

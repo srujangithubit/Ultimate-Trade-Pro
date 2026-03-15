@@ -1,306 +1,423 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Play, Pause, CheckCircle2, Clock } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatCurrency, formatDate, getPnLColor } from '@/lib/utils/formatters';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api/client';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { useEffect } from 'react';
-import { useAuthStore } from '@/lib/stores/authStore';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { Plus, Trash2, Play, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
+import api from '@/lib/api/client';
+import { BacktestSession, CreateSessionDto } from '@/lib/types/backtesting';
 
-const statusConfig = {
-    active: { icon: Play, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Active' },
-    completed: { icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'Completed' },
-    paused: { icon: Pause, color: 'text-yellow-500', bg: 'bg-yellow-500/10', label: 'Paused' },
+const INSTRUMENTS = ['ES', 'NQ', 'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD'];
+const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
+const TIMEZONES = [
+    'UTC',
+    'America/New_York',
+    'America/Chicago',
+    'America/Los_Angeles',
+    'Europe/London',
+    'Europe/Berlin',
+    'Europe/Moscow',
+    'Asia/Tokyo',
+    'Asia/Shanghai',
+    'Asia/Kolkata',
+    'Asia/Dubai',
+    'Australia/Sydney',
+    'Pacific/Auckland',
+];
+
+const safeDate = (d: any) => {
+    if (!d) return 'N/A';
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? 'N/A' : dt.toISOString().split('T')[0];
 };
 
-export default function BacktestingPage() {
-    const [dialogOpen, setDialogOpen] = useState(false);
+/** Convert a datetime-local value ("YYYY-MM-DDTHH:mm") in the given IANA
+ *  timezone to a UTC ISO-8601 string suitable for the backend. */
+const toUTCISO = (dtLocal: string, timezone: string): string => {
+    // Treat the string as UTC first so we can compute the tz offset
+    const asUTC = new Date(dtLocal + ':00Z');
+    if (isNaN(asUTC.getTime())) return new Date(dtLocal).toISOString();
+    const utcStr = asUTC.toLocaleString('en-US', { timeZone: 'UTC' });
+    const tzStr  = asUTC.toLocaleString('en-US', { timeZone: timezone });
+    const offsetMs = new Date(tzStr).getTime() - new Date(utcStr).getTime();
+    return new Date(asUTC.getTime() - offsetMs).toISOString();
+};
+
+export default function BacktestingSessionsPage() {
+    const router = useRouter();
     const queryClient = useQueryClient();
-    const { user, token } = useAuth();
-    const setUser = useAuthStore((state) => state.setUser);
+    const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
 
-    // Hydrate user if missing
-    useEffect(() => {
-        if (token && !user) {
-            api.get('/auth/me').then(res => setUser(res.data)).catch(console.error);
-        }
-    }, [token, user, setUser]);
+    const defaultStart = new Date();
+    defaultStart.setDate(defaultStart.getDate() - 30);
+    const defaultEnd = new Date();
 
-    // Form state
-    const [formData, setFormData] = useState({
+    const [form, setForm] = useState({
         sessionName: '',
-        instrument: '',
-        timeframe: '15m',
-        startDate: '',
-        endDate: '',
-        startingBalance: '50000'
+        instrument: 'XAUUSD',
+        assetClass: 'futures',
+        timeframe: '1h',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        startDate: defaultStart.toISOString().slice(0, 16),
+        endDate: defaultEnd.toISOString().slice(0, 16),
+        startingBalance: 50000,
+        commission: 2,
+        slippage: 0.5,
+        spread: 0.5,
     });
 
-    const { data: sessions = [], isLoading } = useQuery({
-        queryKey: ['backtesting-sessions'],
+    const { data: sessions, isLoading } = useQuery<BacktestSession[]>({
+        queryKey: ['backtest-sessions'],
         queryFn: async () => {
-            const { data } = await api.get('/backtesting/sessions');
-            return data;
+            const res = await api.get('/backtesting/sessions');
+            return res.data;
         },
-        enabled: !!user // Only fetch if user extends
     });
 
-    const createSessionMutation = useMutation({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        mutationFn: async (newSession: any) => {
-            await api.post('/backtesting/sessions', newSession);
+    const createMutation = useMutation({
+        mutationFn: async (dto: CreateSessionDto) => {
+            const res = await api.post('/backtesting/sessions', dto);
+            return res.data;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ['backtest-sessions'] });
+            setCreateDialogOpen(false);
+            router.push(`/backtesting/${data.id}`);
+        },
+        onError: (err: any) => {
+            alert(err?.response?.data?.message || 'Failed to create session');
+        }
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id: string) => {
+            await api.delete(`/backtesting/sessions/${id}`);
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['backtesting-sessions'] });
-            setDialogOpen(false);
-            setFormData({
-                sessionName: '',
-                instrument: '',
-                timeframe: '15m',
-                startDate: '',
-                endDate: '',
-                startingBalance: '50000'
-            });
+            queryClient.invalidateQueries({ queryKey: ['backtest-sessions'] });
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onError: (error: any) => {
-            alert(`Failed to create session: ${error.response?.data?.message || error.message}`);
-        }
     });
 
-    const handleSubmit = () => {
-        if (!user) {
-            alert('You must be logged in to create a session');
-            return;
+    const handleCreate = (e: React.FormEvent) => {
+        e.preventDefault();
+        createMutation.mutate({
+            sessionName: form.sessionName || `${form.instrument} ${form.timeframe} Backtest`,
+            instrument: form.instrument,
+            assetClass: form.assetClass,
+            timeframe: form.timeframe as any,
+            timezone: form.timezone,
+            startDate: toUTCISO(form.startDate, form.timezone),
+            endDate: toUTCISO(form.endDate, form.timezone),
+            startingBalance: Number(form.startingBalance),
+            config: {
+                commission: Number(form.commission),
+                slippage: Number(form.slippage),
+                spread: Number(form.spread),
+                initialBalance: Number(form.startingBalance),
+            }
+        });
+    };
+
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        show: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.1
+            }
         }
-        if (!formData.sessionName || !formData.instrument || !formData.startDate || !formData.endDate) {
-            alert('Please fill in all required fields');
-            return;
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, y: 16 },
+        show: { opacity: 1, y: 0 }
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'created': return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+            case 'running': return 'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse';
+            case 'paused': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+            case 'completed': return 'bg-green-500/10 text-green-400 border-green-500/20';
+            default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
         }
-
-        const assetClass = ['ES', 'NQ'].includes(formData.instrument) ? 'futures' : 'stock';
-
-        const payload = {
-            userId: user.id, // Include user ID
-            sessionName: formData.sessionName,
-            instrument: formData.instrument,
-            assetClass,
-            startingBalance: Number(formData.startingBalance),
-            startDate: new Date(formData.startDate).toISOString(),
-            endDate: new Date(formData.endDate).toISOString(),
-            timeframe: formData.timeframe
-        };
-
-        createSessionMutation.mutate(payload);
     };
 
     return (
-        <div className="space-y-6">
-            <motion.div
-                className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-            >
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Backtesting</h1>
-                    <p className="text-muted-foreground">
-                        Practice and refine your trading strategies with historical data.
-                    </p>
-                </div>
-                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="gap-2 transition-transform hover:scale-105 active:scale-95 shadow-lg shadow-primary/20">
-                            <Plus className="h-4 w-4" />
+        <div className="min-h-screen bg-background p-6 text-foreground">
+            <div className="max-w-7xl mx-auto">
+                <div className="flex justify-between items-center mb-8 border-b border-border pb-4">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">Backtesting</h1>
+                        <p className="text-sm text-muted-foreground">Replay historical data to test your trading strategies.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href="/backtesting/trade-analysis"
+                            className="flex items-center gap-2 rounded-md bg-sky-700 px-4 py-2 font-semibold text-white transition-smooth hover:bg-sky-600 hover:shadow-[0_0_0_2px_rgba(0,102,255,0.32),0_14px_34px_rgba(0,102,255,0.42)]"
+                        >
+                            <BarChart3 className="w-4 h-4" />
+                            Trade Analysis
+                        </Link>
+                        <button
+                            onClick={() => setCreateDialogOpen(true)}
+                            disabled={createMutation.isPending}
+                            className="flex items-center gap-2 bg-[#00d4aa] text-[#0a0a0f] hover:bg-[#00e6b8] px-4 py-2 rounded-md font-semibold transition-colors disabled:opacity-50"
+                        >
+                            <Plus className="w-4 h-4" />
                             New Session
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-lg">
-                        <DialogHeader>
-                            <DialogTitle>Create Backtesting Session</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 pt-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="sessionName">Session Name</Label>
-                                <Input
-                                    id="sessionName"
-                                    placeholder="e.g., ES Futures - Breakout Strategy"
-                                    value={formData.sessionName}
-                                    onChange={(e) => setFormData({ ...formData, sessionName: e.target.value })}
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="instrument">Instrument</Label>
-                                    <Select
-                                        value={formData.instrument}
-                                        onValueChange={(value) => setFormData({ ...formData, instrument: value })}
-                                    >
-                                        <SelectTrigger id="instrument"><SelectValue placeholder="Select" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="ES">ES (S&P 500 Futures)</SelectItem>
-                                            <SelectItem value="NQ">NQ (Nasdaq Futures)</SelectItem>
-                                            <SelectItem value="AAPL">AAPL</SelectItem>
-                                            <SelectItem value="TSLA">TSLA</SelectItem>
-                                            <SelectItem value="MSFT">MSFT</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="timeframe">Timeframe</Label>
-                                    <Select
-                                        value={formData.timeframe}
-                                        onValueChange={(value) => setFormData({ ...formData, timeframe: value })}
-                                    >
-                                        <SelectTrigger id="timeframe"><SelectValue placeholder="Select" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="1m">1 Minute</SelectItem>
-                                            <SelectItem value="5m">5 Minutes</SelectItem>
-                                            <SelectItem value="15m">15 Minutes</SelectItem>
-                                            <SelectItem value="1h">1 Hour</SelectItem>
-                                            <SelectItem value="1D">Daily</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="startDate">Start Date</Label>
-                                    <Input
-                                        id="startDate"
-                                        type="date"
-                                        value={formData.startDate}
-                                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="endDate">End Date</Label>
-                                    <Input
-                                        id="endDate"
-                                        type="date"
-                                        value={formData.endDate}
-                                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="startingBalance">Starting Balance</Label>
-                                <Input
-                                    id="startingBalance"
-                                    type="number"
-                                    placeholder="50000"
-                                    value={formData.startingBalance}
-                                    onChange={(e) => setFormData({ ...formData, startingBalance: e.target.value })}
-                                />
-                            </div>
-                            <Button className="w-full" onClick={handleSubmit} disabled={createSessionMutation.isPending}>
-                                {createSessionMutation.isPending ? 'Creating...' : 'Create Session'}
-                            </Button>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-            </motion.div>
+                        </button>
+                    </div>
+                </div>
 
-            {/* Sessions grid */}
-            <motion.div
-                className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
-                initial="hidden"
-                animate="show"
-                variants={{
-                    hidden: { opacity: 0 },
-                    show: {
-                        opacity: 1,
-                        transition: { staggerChildren: 0.1 }
-                    }
-                }}
-            >
-                <AnimatePresence>
-                    {isLoading ? (
-                        <motion.div className="col-span-full h-24 flex items-center justify-center text-muted-foreground">
-                            Loading sessions...
-                        </motion.div>
-                    ) : sessions.length === 0 ? (
-                        <motion.div className="col-span-full h-24 flex items-center justify-center text-muted-foreground">
-                            No backtesting sessions found. Create one to get started.
-                        </motion.div>
-                    ) : sessions.map((session: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-                        const status = statusConfig[session.status as keyof typeof statusConfig] || statusConfig.active;
-                        const StatusIcon = status.icon;
-                        // Mock stats for now as backend might not return them calculated yet
-                        const pnl = session.pnl || 0;
-                        const winRate = session.winRate || 0;
-                        const totalTrades = session.totalTrades || 0;
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-20">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00d4aa]"></div>
+                    </div>
+                ) : (
+                    <motion.div
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="show"
+                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                    >
+                        {sessions?.length === 0 ? (
+                            <div className="col-span-full flex flex-col items-center justify-center p-12 py-24 border border-border border-dashed rounded-xl bg-card">
+                                <div className="h-12 w-12 bg-muted/50 rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+                                    <Play className="h-6 w-6" />
+                                </div>
+                                <h3 className="text-lg font-medium text-foreground mb-1">No sessions yet</h3>
+                                <p className="text-sm text-muted-foreground">Create a new backtesting session to get started.</p>
+                            </div>
+                        ) : (
+                            sessions?.map((s) => {
+                                const returnPct = s.startingBalance ? ((s.currentBalance - s.startingBalance) / s.startingBalance) * 100 : 0;
+                                const isPositive = returnPct >= 0;
+                                const progressPct = s.totalCandles ? (s.replayIndex / s.totalCandles) * 100 : 0;
 
-                        return (
-                            <motion.div
-                                key={session.id}
-                                layout
-                                variants={{
-                                    hidden: { opacity: 0, scale: 0.9 },
-                                    show: { opacity: 1, scale: 1 }
-                                }}
-                                whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                                exit={{ opacity: 0, scale: 0.9 }}
-                                className="h-full"
-                            >
-                                <Link href={`/backtesting/${session.id}`} className="h-full block">
-                                    <Card className="card-hover cursor-pointer h-full">
-                                        <CardHeader className="pb-3">
-                                            <div className="flex items-start justify-between">
-                                                <CardTitle className="text-base font-semibold leading-tight">
-                                                    {session.sessionName}
-                                                </CardTitle>
-                                                <Badge variant="outline" className={`${status.color} ml-2 shrink-0`}>
-                                                    <StatusIcon className="h-3 w-3 mr-1" />
-                                                    {status.label}
-                                                </Badge>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="space-y-4">
-                                            <div className="flex items-center gap-4 text-sm">
-                                                <Badge variant="secondary">{session.instrument || 'Unknown'}</Badge>
-                                                <span className="text-muted-foreground">{session.timeframe || '15m'}</span>
-                                                <span className="text-muted-foreground">
-                                                    <Clock className="inline h-3 w-3 mr-1" />
-                                                    {formatDate(session.createdAt)}
+                                return (
+                                    <motion.div
+                                        key={s.id}
+                                        variants={itemVariants}
+                                        className="card-hover flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-lg transition-smooth hover:border-primary/45 hover:shadow-[0_0_0_2px_rgba(0,102,255,0.3),0_16px_34px_rgba(0,102,255,0.3)]"
+                                    >
+                                        <div className="p-5 flex-1">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="flex gap-2">
+                                                    <span className="px-2 py-1 bg-muted rounded text-xs font-bold text-foreground">{s.instrument}</span>
+                                                    <span className="px-2 py-1 bg-muted rounded text-xs font-medium text-muted-foreground">{s.timeframe}</span>
+                                                    {s.timezone && <span className="px-2 py-1 bg-muted/60 rounded text-xs text-muted-foreground">{s.timezone.replace(/_/g, ' ')}</span>}
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded text-xs uppercase font-bold border ${getStatusColor(s.status)}`}>
+                                                    {s.status}
                                                 </span>
                                             </div>
 
-                                            <div className="grid grid-cols-3 gap-3 pt-2 border-t">
+                                            <div className="text-xs text-muted-foreground mb-6 flex flex-col gap-1">
+                                                <div>From: <span className="text-foreground">{safeDate(s.startDate)}</span></div>
+                                                <div>To: <span className="text-foreground">{safeDate(s.endDate)}</span></div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4 mb-6">
                                                 <div>
-                                                    <p className="text-xs text-muted-foreground">P&L</p>
-                                                    <p className={`text-sm font-bold font-mono ${getPnLColor(pnl)}`}>
-                                                        {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
+                                                    <p className="text-xs text-muted-foreground mb-1">Starting Balance</p>
+                                                    <p className="font-mono text-sm">${Number(s.startingBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground mb-1">Current Balance</p>
+                                                    <p className="font-mono text-sm">${Number(s.currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <p className="text-xs text-muted-foreground mb-1">Net Return</p>
+                                                    <p className={`font-mono font-bold ${isPositive ? 'text-[#00d4aa]' : 'text-[#ff4444]'}`}>
+                                                        {isPositive ? '+' : ''}{returnPct.toFixed(2)}%
                                                     </p>
                                                 </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">Win Rate</p>
-                                                    <p className="text-sm font-bold">{winRate}%</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">Trades</p>
-                                                    <p className="text-sm font-bold">{totalTrades}</p>
-                                                </div>
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                </Link>
-                            </motion.div>
-                        );
-                    })}
-                </AnimatePresence>
-            </motion.div>
+
+                                            <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                                                <div className="bg-[#00d4aa] h-1.5 rounded-full" style={{ width: `${progressPct}%` }}></div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-secondary p-3 border-t border-border flex items-center justify-between gap-2">
+                                            <div className="flex gap-2 w-full">
+                                                <Link
+                                                    href={`/backtesting/${s.id}`}
+                                                    className="flex flex-1 items-center justify-center gap-1.5 rounded border border-border/70 bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-smooth hover:border-primary/45 hover:bg-accent hover:shadow-[0_0_0_2px_rgba(0,102,255,0.24),0_10px_24px_rgba(0,102,255,0.24)]"
+                                                >
+                                                    <Play className="w-3.5 h-3.5" />
+                                                    {s.status === 'completed' ? 'View' : 'Open'}
+                                                </Link>
+                                                {s.status === 'completed' && (
+                                                    <Link
+                                                        href={`/backtesting/${s.id}/report`}
+                                                        className="flex flex-1 items-center justify-center gap-1.5 rounded border border-indigo-500/30 bg-indigo-600/20 px-3 py-1.5 text-xs font-medium text-indigo-300 transition-smooth hover:border-primary/50 hover:bg-indigo-600/35 hover:text-indigo-200 hover:shadow-[0_0_0_2px_rgba(0,102,255,0.24),0_10px_24px_rgba(0,102,255,0.24)]"
+                                                    >
+                                                        <BarChart3 className="w-3.5 h-3.5" />
+                                                        Report
+                                                    </Link>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm('Are you sure you want to delete this session?')) {
+                                                        deleteMutation.mutate(s.id);
+                                                    }
+                                                }}
+                                                disabled={deleteMutation.isPending}
+                                                className="rounded p-1.5 text-muted-foreground transition-smooth hover:bg-red-400/10 hover:text-red-400"
+                                                title="Delete session"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })
+                        )}
+                    </motion.div>
+                )}
+
+                {/* Create Dialog Overlay */}
+                {createDialogOpen && (
+                    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="bg-card border border-border shadow-2xl rounded-xl w-full max-w-lg overflow-hidden"
+                        >
+                            <div className="p-6 border-b border-border">
+                                <h2 className="text-xl font-bold text-foreground">Create Backtesting Session</h2>
+                                <p className="text-sm text-muted-foreground mt-1">Configure historical replay parameters.</p>
+                            </div>
+
+                            <form onSubmit={handleCreate} className="p-6 space-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Session Name</label>
+                                    <input type="text" required placeholder="e.g. My ES 15m Strategy"
+                                        className="w-full bg-muted border border-border rounded-md p-2 text-sm text-foreground focus:border-[#00d4aa] focus:ring-1 focus:ring-[#00d4aa] outline-none"
+                                        value={form.sessionName} onChange={e => setForm({ ...form, sessionName: e.target.value })}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Instrument</label>
+                                        <select
+                                            className="w-full bg-muted border border-border rounded-md p-2 text-sm text-foreground focus:border-[#00d4aa] focus:ring-1 focus:ring-[#00d4aa] outline-none"
+                                            value={form.instrument} onChange={e => setForm({ ...form, instrument: e.target.value })}
+                                        >
+                                            {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Asset Class</label>
+                                        <select
+                                            className="w-full bg-muted border border-border rounded-md p-2 text-sm text-foreground focus:border-[#00d4aa] focus:ring-1 focus:ring-[#00d4aa] outline-none"
+                                            value={form.assetClass} onChange={e => setForm({ ...form, assetClass: e.target.value })}
+                                        >
+                                            <option value="futures">Futures</option>
+                                            <option value="forex">Forex</option>
+                                            <option value="crypto">Crypto</option>
+                                            <option value="stock">Stock</option>
+                                            <option value="options">Options</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Timeframe</label>
+                                        <select
+                                            className="w-full bg-muted border border-border rounded-md p-2 text-sm text-foreground focus:border-[#00d4aa] focus:ring-1 focus:ring-[#00d4aa] outline-none"
+                                            value={form.timeframe} onChange={e => setForm({ ...form, timeframe: e.target.value })}
+                                        >
+                                            {TIMEFRAMES.map(t => <option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Timezone</label>
+                                        <select
+                                            className="w-full bg-muted border border-border rounded-md p-2 text-sm text-foreground focus:border-[#00d4aa] focus:ring-1 focus:ring-[#00d4aa] outline-none"
+                                            value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}
+                                        >
+                                            {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Start Date</label>
+                                        <input type="datetime-local" required
+                                            className="w-full bg-muted border border-border rounded-md p-2 text-sm text-foreground outline-none"
+                                            value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">End Date</label>
+                                        <input type="datetime-local" required
+                                            className="w-full bg-muted border border-border rounded-md p-2 text-sm text-foreground outline-none"
+                                            value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Starting Balance ($)</label>
+                                    <input type="number" step="0.01" min="100" required
+                                        className="w-full bg-muted border border-border rounded-md p-2 text-sm text-foreground outline-none font-mono"
+                                        value={form.startingBalance} onChange={e => setForm({ ...form, startingBalance: Number(e.target.value) })}
+                                    />
+                                </div>
+
+                                <div className="pt-2 border-t border-border">
+                                    <button type="button" onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                                        {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                        Advanced Configuration
+                                    </button>
+
+                                    {showAdvanced && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            className="grid grid-cols-3 gap-3 mt-4"
+                                        >
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-muted-foreground">Commission/Lot</label>
+                                                <input type="number" step="0.1" value={form.commission} onChange={e => setForm({ ...form, commission: Number(e.target.value) })}
+                                                    className="w-full bg-muted border border-border rounded-md p-2 text-xs text-foreground" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-muted-foreground">Slippage (pips)</label>
+                                                <input type="number" step="0.1" value={form.slippage} onChange={e => setForm({ ...form, slippage: Number(e.target.value) })}
+                                                    className="w-full bg-muted border border-border rounded-md p-2 text-xs text-foreground" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-muted-foreground">Spread (pips)</label>
+                                                <input type="number" step="0.1" value={form.spread} onChange={e => setForm({ ...form, spread: Number(e.target.value) })}
+                                                    className="w-full bg-muted border border-border rounded-md p-2 text-xs text-foreground" />
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-3 justify-end pt-4 mt-6 border-t border-border">
+                                    <button type="button" onClick={() => setCreateDialogOpen(false)}
+                                        className="px-4 py-2 rounded-md bg-transparent hover:bg-muted text-muted-foreground text-sm font-medium transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" disabled={createMutation.isPending}
+                                        className="px-4 py-2 rounded-md bg-[#00d4aa] hover:bg-[#00e6b8] text-[#0a0a0f] text-sm font-bold transition-colors disabled:opacity-50 flex items-center gap-2">
+                                        {createMutation.isPending && <div className="w-4 h-4 border-2 border-[#0a0a0f] border-t-transparent rounded-full animate-spin" />}
+                                        Create Session
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </div>
         </div >
     );
 }
