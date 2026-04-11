@@ -31,6 +31,7 @@ import {
     Users,
     Repeat2,
     ClipboardCheck,
+    BrainCircuit,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -57,6 +58,7 @@ const navigation = [
     { name: 'Trade Analysis', href: '/trade-analysis', icon: FileText },
     { name: 'Journal', href: '/journal', icon: BookOpen },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+    { name: 'AI Report', href: '/ai-report', icon: BrainCircuit },
     { name: 'Playbooks', href: '/playbooks', icon: BookMarked },
     { name: 'Checklist', href: '/checklist', icon: ClipboardCheck },
     { name: 'Calculators', href: '/calculators', icon: Calculator },

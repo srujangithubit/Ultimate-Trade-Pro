@@ -25,6 +25,25 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { accountsApi } from '@/lib/api/accounts';
 import { aiReportApi } from '@/lib/api/ai-report';
+import { api } from '@/lib/api/client';
+import { BacktestSession } from '@/lib/types/backtesting';
+
+const BACKTEST_BASES = ['/backtesting', '/api/backtesting'];
+
+async function backtestingRequest<T>(path: string) {
+  let lastError: unknown;
+  for (const base of BACKTEST_BASES) {
+    try {
+      return await api.get<T>(`${base}${path}`);
+    } catch (error) {
+      lastError = error;
+      if ((error as { response?: { status?: number } })?.response?.status !== 404) {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
 
 const money = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -56,15 +75,43 @@ function priorityClass(priority: string) {
 
 export default function AiReportPage() {
   const [accountId, setAccountId] = useState<string>('ALL');
+  const [sessionId, setSessionId] = useState<string>('ALL');
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounts', 'ai-report-filter'],
     queryFn: () => accountsApi.getAll(),
   });
 
+  const { data: sessions = [] } = useQuery({
+    queryKey: ['backtest-sessions', 'ai-report-filter'],
+    queryFn: async () => {
+      try {
+        const response = await backtestingRequest<
+          BacktestSession[] | { sessions?: BacktestSession[] }
+        >('/sessions');
+
+        const payload = response.data;
+        if (Array.isArray(payload)) {
+          return payload;
+        }
+
+        return Array.isArray(payload?.sessions) ? payload.sessions : [];
+      } catch (error) {
+        if ((error as { response?: { status?: number } })?.response?.status === 500) {
+          return [];
+        }
+        throw error;
+      }
+    },
+  });
+
   const reportQuery = useQuery({
-    queryKey: ['ai-report', accountId],
-    queryFn: () => aiReportApi.getReport(accountId === 'ALL' ? undefined : accountId),
+    queryKey: ['ai-report', accountId, sessionId],
+    queryFn: () =>
+      aiReportApi.getReport({
+        accountId: accountId === 'ALL' ? undefined : accountId,
+        sessionId: sessionId === 'ALL' ? undefined : sessionId,
+      }),
   });
 
   const report = reportQuery.data;
@@ -102,6 +149,20 @@ export default function AiReportPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Select value={sessionId} onValueChange={setSessionId}>
+                <SelectTrigger className="w-72 border-white/15 bg-black/30 text-white">
+                  <SelectValue placeholder="Filter backtest session" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Backtest Sessions</SelectItem>
+                  {sessions.map((session) => (
+                    <SelectItem key={session.id} value={session.id}>
+                      {session.instrument} {session.timeframe} • {new Date(session.createdAt).toLocaleDateString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               <Select value={accountId} onValueChange={setAccountId}>
                 <SelectTrigger className="w-60 border-white/15 bg-black/30 text-white">
                   <SelectValue placeholder="Filter account" />

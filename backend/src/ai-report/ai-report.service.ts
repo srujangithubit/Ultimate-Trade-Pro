@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
+import { BacktestingService } from '../backtesting/backtesting.service';
 import {
   AiNormalizedTrade,
   buildDeepResearch,
@@ -16,13 +17,39 @@ import {
   generateActionPlan,
 } from './engines';
 
+type AiReportTradeRow = {
+  id: string;
+  accountId: string | null;
+  symbol: string | null;
+  setup: string | null;
+  entryDate: Date;
+  exitDate: Date | null;
+  entryPrice: unknown;
+  exitPrice: unknown;
+  stopLoss: unknown;
+  takeProfit: unknown;
+  pnlGross: unknown;
+  pnlNet: unknown;
+  notes: string | null;
+  tags: unknown;
+  customMetrics: unknown;
+  status: string;
+};
+
 @Injectable()
 export class AiReportService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly backtestingService: BacktestingService,
+  ) {}
 
-  async generate(userId: string, accountId?: string) {
+  async generate(userId: string, accountId?: string, sessionId?: string) {
     if (accountId && !this.isUuid(accountId)) {
       throw new BadRequestException('Invalid accountId format');
+    }
+
+    if (sessionId && !this.isUuid(sessionId)) {
+      throw new BadRequestException('Invalid sessionId format');
     }
 
     if (accountId) {
@@ -36,40 +63,93 @@ export class AiReportService {
       }
     }
 
-    const [trades, accounts] = await Promise.all([
-      this.prisma.trade.findMany({
+    let trades: AiReportTradeRow[] = [];
+    let accounts: Awaited<
+      ReturnType<typeof this.prisma.tradingAccount.findMany>
+    > = [];
+
+    if (sessionId) {
+      const session = await this.backtestingService.getSession(
+        userId,
+        sessionId,
+      );
+      const resolvedAccountId = accountId || session.accountId || undefined;
+
+      if (accountId && session.accountId && session.accountId !== accountId) {
+        throw new BadRequestException(
+          'Provided accountId does not match the selected session',
+        );
+      }
+
+      trades = session.trades
+        .map((trade) => ({
+          id: trade.id,
+          accountId: trade.accountId,
+          symbol: trade.symbol,
+          setup: trade.setup,
+          entryDate: trade.entryDate,
+          exitDate: trade.exitDate,
+          entryPrice: trade.entryPrice,
+          exitPrice: trade.exitPrice,
+          stopLoss: trade.stopLoss,
+          takeProfit: trade.takeProfit,
+          pnlGross: trade.pnlGross,
+          pnlNet: trade.pnlNet,
+          notes: trade.notes,
+          tags: trade.tags,
+          customMetrics: trade.customMetrics,
+          status: trade.status,
+        }))
+        .filter(
+          (trade) =>
+            trade.status === 'CLOSED' &&
+            (!resolvedAccountId || trade.accountId === resolvedAccountId),
+        );
+
+      accounts = await this.prisma.tradingAccount.findMany({
         where: {
           userId,
-          status: 'CLOSED',
-          ...(accountId ? { accountId } : {}),
-        },
-        select: {
-          id: true,
-          accountId: true,
-          symbol: true,
-          setup: true,
-          entryDate: true,
-          exitDate: true,
-          entryPrice: true,
-          exitPrice: true,
-          stopLoss: true,
-          takeProfit: true,
-          pnlGross: true,
-          pnlNet: true,
-          notes: true,
-          tags: true,
-          customMetrics: true,
-        },
-        orderBy: { entryDate: 'asc' },
-      }),
-      this.prisma.tradingAccount.findMany({
-        where: {
-          userId,
-          ...(accountId ? { id: accountId } : {}),
+          ...(resolvedAccountId ? { id: resolvedAccountId } : {}),
         },
         orderBy: { createdAt: 'asc' },
-      }),
-    ]);
+      });
+    } else {
+      [trades, accounts] = await Promise.all([
+        this.prisma.trade.findMany({
+          where: {
+            userId,
+            status: 'CLOSED',
+            ...(accountId ? { accountId } : {}),
+          },
+          select: {
+            id: true,
+            accountId: true,
+            symbol: true,
+            setup: true,
+            entryDate: true,
+            exitDate: true,
+            entryPrice: true,
+            exitPrice: true,
+            stopLoss: true,
+            takeProfit: true,
+            pnlGross: true,
+            pnlNet: true,
+            notes: true,
+            tags: true,
+            customMetrics: true,
+            status: true,
+          },
+          orderBy: { entryDate: 'asc' },
+        }),
+        this.prisma.tradingAccount.findMany({
+          where: {
+            userId,
+            ...(accountId ? { id: accountId } : {}),
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ]);
+    }
 
     const normalizedTrades: AiNormalizedTrade[] = trades.map((trade) => {
       const entryDate = new Date(trade.entryDate);
@@ -213,6 +293,7 @@ export class AiReportService {
       generatedAt: new Date().toISOString(),
       filters: {
         accountId: accountId || null,
+        sessionId: sessionId || null,
       },
       metrics,
       patterns,
@@ -277,7 +358,7 @@ Return ONLY valid JSON with this exact shape:
 `;
 
     try {
-      const response = await axios.post(
+      const response = await axios.post<{ response?: string }>(
         ollamaUrl,
         {
           model,
@@ -293,8 +374,9 @@ Return ONLY valid JSON with this exact shape:
       }
 
       return {
-        summary: String(
-          (parsed as Record<string, unknown>).summary || fallback.summary,
+        summary: this.toSummaryString(
+          (parsed as Record<string, unknown>).summary,
+          fallback.summary,
         ),
         weaknesses: this.toArray(
           (parsed as Record<string, unknown>).weaknesses,
@@ -411,6 +493,21 @@ Return ONLY valid JSON with this exact shape:
   private toNumber(value: unknown): number {
     const num = Number(value);
     return Number.isFinite(num) ? num : 0;
+  }
+
+  private toSummaryString(value: unknown, fallback: string): string {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+
+    return fallback;
   }
 
   private hasNewsTag(tags: unknown): boolean {

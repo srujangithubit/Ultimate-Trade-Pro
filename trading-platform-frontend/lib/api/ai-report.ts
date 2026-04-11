@@ -11,6 +11,7 @@ export interface AiReportResponse {
   generatedAt: string;
   filters: {
     accountId: string | null;
+    sessionId: string | null;
   };
   metrics: {
     totalTrades: number;
@@ -118,9 +119,12 @@ export interface AiReportResponse {
 }
 
 export const aiReportApi = {
-  getReport: async (accountId?: string): Promise<AiReportResponse> => {
+  getReport: async (params?: {
+    accountId?: string;
+    sessionId?: string;
+  }): Promise<AiReportResponse> => {
     const { data } = await api.get<AiReportResponse>('/ai-report', {
-      params: accountId ? { accountId } : undefined,
+      params,
     });
     return data;
   },

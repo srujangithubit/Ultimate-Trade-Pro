@@ -12,7 +12,8 @@ export class AiReportController {
   getReport(
     @GetUser('id') userId: string,
     @Query('accountId') accountId?: string,
+    @Query('sessionId') sessionId?: string,
   ) {
-    return this.aiReportService.generate(userId, accountId);
+    return this.aiReportService.generate(userId, accountId, sessionId);
   }
 }
