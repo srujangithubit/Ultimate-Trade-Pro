@@ -20,6 +20,7 @@ import { ChartValidationModule } from './chart-validation/chart-validation.modul
 import { SetupDetectionModule } from './setup-detection/setup-detection.module';
 import { CommonModule } from './common/common.module';
 import { ObservabilityModule } from './observability/observability.module';
+import { AiReportModule } from './ai-report/ai-report.module';
 import { AppGateway } from './app.gateway';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -61,6 +62,7 @@ const restRateLimitPerMinute = Number(
     TradeSyncModule,
     ChartValidationModule,
     SetupDetectionModule,
+    AiReportModule,
     ObservabilityModule,
   ],
   controllers: [AppController],
