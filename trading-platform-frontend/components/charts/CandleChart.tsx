@@ -21,6 +21,13 @@ const TF_TO_MT5: Record<Timeframe, string> = {
     '1h': 'H1',
 };
 
+const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
+    '1m': 60,
+    '5m': 300,
+    '15m': 900,
+    '1h': 3600,
+};
+
 // Theme palettes for Lightweight Charts
 const CHART_THEMES = {
     dark: {
@@ -80,6 +87,8 @@ export default function CandleChart({
     const chartRef = useRef<IChartApi | null>(null);
     const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
     const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+    const historicalLatestTimeRef = useRef(0);
+    const latestLiveCandleRef = useRef<Candle | null>(null);
     const [mounted, setMounted] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const { resolvedTheme } = useTheme();
@@ -185,6 +194,17 @@ export default function CandleChart({
         // Register live candle update handler immediately after chart creation
         if (onCandleUpdateRef.current) {
             onCandleUpdateRef.current((candle: Candle) => {
+                const timeframeSeconds = TIMEFRAME_SECONDS[timeframe] || 300;
+                const historyIsStale = historicalLatestTimeRef.current > 0
+                    && candle.time > historicalLatestTimeRef.current + timeframeSeconds * 2;
+
+                if (historyIsStale) {
+                    candleSeriesRef.current?.setData([]);
+                    volumeSeriesRef.current?.setData([]);
+                    historicalLatestTimeRef.current = 0;
+                }
+
+                latestLiveCandleRef.current = candle;
                 candleSeriesRef.current?.update({
                     time: candle.time as UTCTimestamp,
                     open: candle.open,
@@ -333,8 +353,36 @@ export default function CandleChart({
                 color: c.close >= c.open ? 'rgba(0, 212, 170, 0.2)' : 'rgba(255, 68, 68, 0.2)',
             }));
 
-            candleSeriesRef.current!.setData(candleData);
-            volumeSeriesRef.current?.setData(volumeData);
+            const latestHistoricalTime = candleData[candleData.length - 1].time as number;
+            const latestLiveCandle = latestLiveCandleRef.current;
+            const historyIsStale = latestLiveCandle
+                && latestLiveCandle.time > latestHistoricalTime + (TIMEFRAME_SECONDS[timeframe] || 300) * 2;
+
+            if (historyIsStale) {
+                // Do not mix an old database/terminal snapshot with current
+                // ticks; the live candle is the authoritative current series.
+                candleSeriesRef.current!.setData([]);
+                volumeSeriesRef.current?.setData([]);
+                candleSeriesRef.current!.update({
+                    time: latestLiveCandle.time as UTCTimestamp,
+                    open: latestLiveCandle.open,
+                    high: latestLiveCandle.high,
+                    low: latestLiveCandle.low,
+                    close: latestLiveCandle.close,
+                });
+                volumeSeriesRef.current?.update({
+                    time: latestLiveCandle.time as UTCTimestamp,
+                    value: latestLiveCandle.volume,
+                    color: latestLiveCandle.close >= latestLiveCandle.open
+                        ? 'rgba(0, 212, 170, 0.2)'
+                        : 'rgba(255, 68, 68, 0.2)',
+                });
+                historicalLatestTimeRef.current = 0;
+            } else {
+                candleSeriesRef.current!.setData(candleData);
+                volumeSeriesRef.current?.setData(volumeData);
+                historicalLatestTimeRef.current = latestHistoricalTime;
+            }
             chartRef.current?.timeScale().scrollToRealTime();
             setIsLoading(false);
         };
