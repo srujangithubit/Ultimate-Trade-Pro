@@ -18,14 +18,20 @@ const TF_TO_MT5: Record<Timeframe, string> = {
     '1m': 'M1',
     '5m': 'M5',
     '15m': 'M15',
+    '30m': 'M30',
     '1h': 'H1',
+    '4h': 'H4',
+    '1d': 'D1',
 };
 
 const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
     '1m': 60,
     '5m': 300,
     '15m': 900,
+    '30m': 1800,
     '1h': 3600,
+    '4h': 14400,
+    '1d': 86400,
 };
 
 // Theme palettes for Lightweight Charts
@@ -326,7 +332,7 @@ export default function CandleChart({
             for (const candle of rawCandles) {
                 const rawTime = typeof candle.time === 'number'
                     ? candle.time
-                    : new Date(candle.time).getTime();
+                    : Date.parse(/Z$|[+-]\d{2}:?\d{2}$/.test(candle.time) ? candle.time : `${candle.time}Z`);
                 const time = Math.floor((rawTime > 10_000_000_000 ? rawTime : rawTime * 1000) / 1000);
 
                 if (

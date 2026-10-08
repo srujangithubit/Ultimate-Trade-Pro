@@ -4,7 +4,7 @@ Data Fetcher - Retrieves market data from MetaTrader 5.
 
 import MetaTrader5 as mt5
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ def get_ohlcv(symbol: str, timeframe: str, bars: int = 100) -> list[dict]:
         return []
 
     df = pd.DataFrame(rates)
-    df["time"] = pd.to_datetime(df["time"], unit="s")
+    df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
 
     return df[["time", "open", "high", "low", "close", "tick_volume"]].to_dict(
         orient="records"
@@ -84,7 +84,7 @@ def get_latest_tick(symbol: str) -> dict | None:
     if tick is None:
         return None
     return {
-        "time": datetime.fromtimestamp(tick.time).isoformat(),
+        "time": datetime.fromtimestamp(tick.time, tz=timezone.utc).isoformat(),
         "bid": tick.bid,
         "ask": tick.ask,
         "last": tick.last,

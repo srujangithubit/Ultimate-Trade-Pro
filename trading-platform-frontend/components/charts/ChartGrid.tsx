@@ -30,7 +30,7 @@ const DEFAULT_CONFIGS: ChartConfig[] = [
     { symbol: 'XAUUSD', timeframe: '1h' },
 ];
 
-const TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '1h'];
+const TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
 
 export default function ChartGrid({ mode, onChartReady, onChartClick, drawingMode }: ChartGridProps) {
     const { activeSymbol, timeframe, replayActive, markers, tradeArrows } = useTradingStore();
