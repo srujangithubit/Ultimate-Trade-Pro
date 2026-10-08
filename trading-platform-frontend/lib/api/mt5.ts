@@ -3,14 +3,40 @@
  */
 
 const MT5_BASE = process.env.NEXT_PUBLIC_MT5_API_URL || 'http://localhost:3001';
+const MT5_INTERNAL_API_KEY = process.env.NEXT_PUBLIC_MT5_INTERNAL_API_KEY || '';
+
+function getMt5InternalApiKey(): string {
+  if (MT5_INTERNAL_API_KEY) {
+    return MT5_INTERNAL_API_KEY;
+  }
+
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem('mt5_internal_api_key') || '';
+    if (stored) {
+      return stored;
+    }
+  }
+
+  return '';
+}
 
 /**
  * Dedicated axios-like fetcher for the MT5 Node server.
  * We use raw fetch here since the MT5 server is separate from the main backend.
  */
 async function mt5Fetch(path: string, options?: RequestInit) {
+  const headers = new Headers(options?.headers);
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const internalApiKey = getMt5InternalApiKey();
+  if (internalApiKey) {
+    headers.set('Authorization', `Bearer ${internalApiKey}`);
+  }
+
   const res = await fetch(`${MT5_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...options,
   });
   if (!res.ok) {
@@ -37,6 +63,21 @@ export const mt5Api = {
   /** Get account info */
   getAccount: async () => {
     return mt5Fetch('/api/mt5/account');
+  },
+
+  /** Query account info for a specific MT5 login (password optional if terminal has cached credentials) */
+  queryAccount: async (
+    login: number,
+    server: string,
+    password?: string,
+  ) => {
+    const params = new URLSearchParams({
+      server,
+    });
+    if (password) {
+      params.set('password', password);
+    }
+    return mt5Fetch(`/api/mt5/account/${login}?${params.toString()}`);
   },
 
   /** Get open positions */

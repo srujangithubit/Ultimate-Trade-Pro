@@ -32,15 +32,49 @@ export class AccountsService {
    * Create a new trading account and generate an API key.
    */
   async create(userId: string, dto: CreateAccountDto) {
+    const normalizedLogin = dto.accountLogin?.trim() || null;
+    const normalizedServer = dto.server?.trim() || null;
+    const parsedLastSeen = dto.lastSeen ? new Date(dto.lastSeen) : null;
+
+    if (normalizedLogin) {
+      const existing = await this.prisma.tradingAccount.findFirst({
+        where: {
+          userId,
+          accountLogin: normalizedLogin,
+        },
+      });
+
+      if (existing) {
+        return this.prisma.tradingAccount.update({
+          where: { id: existing.id },
+          data: {
+            name: dto.name || existing.name,
+            broker: dto.broker ?? normalizedServer ?? existing.broker,
+            currency: dto.currency || existing.currency,
+            accountType: dto.accountType || existing.accountType,
+            server: normalizedServer ?? existing.server,
+            balance: dto.balance ?? existing.balance,
+            equity: dto.equity ?? existing.equity,
+            lastSeen: parsedLastSeen ?? existing.lastSeen,
+          },
+        });
+      }
+    }
+
     const { raw, hash } = this.generateApiKey();
 
     const account = await this.prisma.tradingAccount.create({
       data: {
         userId,
         name: dto.name,
-        broker: dto.broker,
+        broker: dto.broker ?? normalizedServer,
         accountType: dto.accountType || 'live',
         currency: dto.currency || 'USD',
+        accountLogin: normalizedLogin,
+        server: normalizedServer,
+        balance: dto.balance ?? 0,
+        equity: dto.equity ?? 0,
+        lastSeen: parsedLastSeen,
         apiKeyHash: hash,
         active: true,
       },
@@ -88,9 +122,14 @@ export class AccountsService {
         }
 
         // Determine online status (within 90 seconds)
-        const isOnline =
+        const seenRecently =
           account.lastSeen &&
-          new Date().getTime() - new Date(account.lastSeen).getTime() < 90000;
+          new Date().getTime() - new Date(account.lastSeen).getTime() < 15 * 60_000;
+        const hasMt5Identity =
+          Boolean(account.accountLogin?.trim()) && Boolean(account.server?.trim());
+        const hasAccountValue =
+          Number(account.balance) > 0 || Number(account.equity) > 0;
+        const isOnline = Boolean(seenRecently || (hasMt5Identity && hasAccountValue));
 
         return {
           ...account,
@@ -130,9 +169,23 @@ export class AccountsService {
   async update(userId: string, id: string, dto: UpdateAccountDto) {
     await this.findOne(userId, id);
 
+    const {
+      lastSeen,
+      server,
+      accountLogin,
+      ...rest
+    } = dto;
+
     return this.prisma.tradingAccount.update({
       where: { id },
-      data: dto,
+      data: {
+        ...rest,
+        ...(server !== undefined ? { server: server.trim() || null } : {}),
+        ...(accountLogin !== undefined
+          ? { accountLogin: accountLogin.trim() || null }
+          : {}),
+        ...(lastSeen ? { lastSeen: new Date(lastSeen) } : {}),
+      },
     });
   }
 

@@ -77,6 +77,38 @@ const MT5_WS_URL =
   (typeof window !== 'undefined'
     ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://localhost:3001/ws/mt5`
     : 'ws://localhost:3001/ws/mt5');
+const MT5_INTERNAL_API_KEY = process.env.NEXT_PUBLIC_MT5_INTERNAL_API_KEY || '';
+
+function getMt5InternalApiKey(): string {
+  if (MT5_INTERNAL_API_KEY) {
+    return MT5_INTERNAL_API_KEY;
+  }
+
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem('mt5_internal_api_key') || '';
+    if (stored) {
+      return stored;
+    }
+  }
+
+  return '';
+}
+
+function buildMt5WsUrl(): string {
+  const internalApiKey = getMt5InternalApiKey();
+  if (!internalApiKey) {
+    return MT5_WS_URL;
+  }
+
+  try {
+    const url = new URL(MT5_WS_URL);
+    url.searchParams.set('token', internalApiKey);
+    return url.toString();
+  } catch {
+    const sep = MT5_WS_URL.includes('?') ? '&' : '?';
+    return `${MT5_WS_URL}${sep}token=${encodeURIComponent(internalApiKey)}`;
+  }
+}
 
 /**
  * Gracefully dispose of a WebSocket without triggering the browser's
@@ -244,7 +276,7 @@ export function useMT5WebSocket() {
     }
 
     try {
-      const ws = new WebSocket(MT5_WS_URL);
+      const ws = new WebSocket(buildMt5WsUrl());
       wsRef.current = ws;
 
       ws.onopen = () => {

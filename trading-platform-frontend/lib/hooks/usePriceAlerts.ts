@@ -41,6 +41,47 @@ const MT5_WS_URL =
 
 const MT5_REST =
   process.env.NEXT_PUBLIC_MT5_REST_URL || 'http://localhost:3001/api/mt5';
+const MT5_INTERNAL_API_KEY = process.env.NEXT_PUBLIC_MT5_INTERNAL_API_KEY || '';
+
+function getMt5InternalApiKey(): string {
+  if (MT5_INTERNAL_API_KEY) {
+    return MT5_INTERNAL_API_KEY;
+  }
+
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem('mt5_internal_api_key') || '';
+    if (stored) {
+      return stored;
+    }
+  }
+
+  return '';
+}
+
+function buildMt5WsUrl(): string {
+  const internalApiKey = getMt5InternalApiKey();
+  if (!internalApiKey) {
+    return MT5_WS_URL;
+  }
+
+  try {
+    const url = new URL(MT5_WS_URL);
+    url.searchParams.set('token', internalApiKey);
+    return url.toString();
+  } catch {
+    const sep = MT5_WS_URL.includes('?') ? '&' : '?';
+    return `${MT5_WS_URL}${sep}token=${encodeURIComponent(internalApiKey)}`;
+  }
+}
+
+function buildMt5AuthHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra);
+  const internalApiKey = getMt5InternalApiKey();
+  if (internalApiKey) {
+    headers.set('Authorization', `Bearer ${internalApiKey}`);
+  }
+  return headers;
+}
 
 /**
  * Request browser notification permission (once).
@@ -112,7 +153,7 @@ export function usePriceAlerts() {
     function connectWs() {
       if (!mountedRef.current) return;
 
-      const ws = new WebSocket(MT5_WS_URL);
+      const ws = new WebSocket(buildMt5WsUrl());
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -195,7 +236,7 @@ export function usePriceAlerts() {
       // Use REST for reliable creation
       const res = await fetch(`${MT5_REST}/alerts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildMt5AuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ symbol, targetPrice, direction, note }),
       });
       const json = await res.json();
@@ -211,14 +252,17 @@ export function usePriceAlerts() {
   );
 
   const deleteAlert = useCallback(async (id: string) => {
-    await fetch(`${MT5_REST}/alerts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await fetch(`${MT5_REST}/alerts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: buildMt5AuthHeaders(),
+    });
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
   const updateAlert = useCallback(async (id: string, targetPrice: number, direction?: 'above' | 'below') => {
     const res = await fetch(`${MT5_REST}/alerts/${encodeURIComponent(id)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildMt5AuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ targetPrice, direction }),
     });
     const json = await res.json();
@@ -229,7 +273,9 @@ export function usePriceAlerts() {
   }, []);
 
   const refreshAlerts = useCallback(async () => {
-    const res = await fetch(`${MT5_REST}/alerts`);
+    const res = await fetch(`${MT5_REST}/alerts`, {
+      headers: buildMt5AuthHeaders(),
+    });
     const json = await res.json();
     setAlerts(json.alerts || []);
   }, []);

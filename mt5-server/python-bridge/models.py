@@ -13,6 +13,7 @@ class AccountInfo:
     server: str
     balance: float
     equity: float
+    profit: float
     margin: float
     free_margin: float
     leverage: int

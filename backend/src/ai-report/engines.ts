@@ -75,6 +75,8 @@ function initBucket() {
     holdTimeSum: 0,
     grossProfit: 0,
     grossLoss: 0,
+    maxWin: Number.NEGATIVE_INFINITY,
+    maxLoss: Number.POSITIVE_INFINITY,
   };
 }
 
@@ -89,9 +91,11 @@ function updateBucket(
   if (tradeResult > 0) {
     bucket.wins += 1;
     bucket.grossProfit += tradeResult;
+    bucket.maxWin = Math.max(bucket.maxWin, tradeResult);
   } else if (tradeResult < 0) {
     bucket.losses += 1;
     bucket.grossLoss += Math.abs(tradeResult);
+    bucket.maxLoss = Math.min(bucket.maxLoss, tradeResult);
   }
 }
 
@@ -109,7 +113,20 @@ function finalizeBucket(name: string, bucket: ReturnType<typeof initBucket>) {
     pnl: round(bucket.pnl),
     avgHoldTime: round(avgHoldTime),
     profitFactor: round(profitFactor),
+    maxWin: Number.isFinite(bucket.maxWin) ? round(bucket.maxWin) : 0,
+    maxLoss: Number.isFinite(bucket.maxLoss) ? round(bucket.maxLoss) : 0,
   };
+}
+
+function getBestAndWorst<T extends { pnl: number }>(rows: T[]) {
+  if (!rows.length) {
+    return { best: null, worst: null };
+  }
+
+  const best = [...rows].sort((a, b) => b.pnl - a.pnl)[0];
+  const worst = [...rows].sort((a, b) => a.pnl - b.pnl)[0];
+
+  return { best, worst };
 }
 
 export function calculateMetrics(trades: AiNormalizedTrade[]): AiMetrics {
@@ -285,9 +302,13 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
   const assetBuckets: Record<string, ReturnType<typeof initBucket>> = {};
   const sessionBuckets: Record<string, ReturnType<typeof initBucket>> = {};
   const hourBuckets: Record<string, ReturnType<typeof initBucket>> = {};
+  const weekdayBuckets: Record<string, ReturnType<typeof initBucket>> = {};
+  const dayBuckets: Record<string, ReturnType<typeof initBucket>> = {};
 
   const holdTimes: number[] = [];
   const pnlValues: number[] = [];
+  const timestamps: Date[] = [];
+  const activeHourKeys = new Set<string>();
 
   let wins = 0;
   let losses = 0;
@@ -295,6 +316,12 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
   let grossLoss = 0;
   let pnlSum = 0;
   let holdTimeSum = 0;
+  let shortLossCount = 0;
+
+  let currentWinStreak = 0;
+  let currentLossStreak = 0;
+  let maxWinStreak = 0;
+  let maxLossStreak = 0;
 
   for (const trade of trades) {
     const symbol = (trade.symbol || 'UNKNOWN').toUpperCase();
@@ -310,10 +337,23 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
     if (result > 0) {
       wins += 1;
       grossProfit += result;
+      currentWinStreak += 1;
+      currentLossStreak = 0;
     } else if (result < 0) {
       losses += 1;
       grossLoss += Math.abs(result);
+      currentLossStreak += 1;
+      currentWinStreak = 0;
+      if (holdTime <= 2) {
+        shortLossCount += 1;
+      }
+    } else {
+      currentWinStreak = 0;
+      currentLossStreak = 0;
     }
+
+    maxWinStreak = Math.max(maxWinStreak, currentWinStreak);
+    maxLossStreak = Math.max(maxLossStreak, currentLossStreak);
 
     if (!assetBuckets[symbol]) assetBuckets[symbol] = initBucket();
     if (!sessionBuckets[session]) sessionBuckets[session] = initBucket();
@@ -323,9 +363,24 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
 
     const date = new Date(trade.timestamp);
     if (!Number.isNaN(date.getTime())) {
-      const hour = String(date.getUTCHours()).padStart(2, '0');
+      timestamps.push(date);
+
+      const hour = String(date.getUTCHours());
+      const day = date.toISOString().slice(0, 10);
+      const weekday = date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        timeZone: 'UTC',
+      });
+
       if (!hourBuckets[hour]) hourBuckets[hour] = initBucket();
+      if (!weekdayBuckets[weekday]) weekdayBuckets[weekday] = initBucket();
+      if (!dayBuckets[day]) dayBuckets[day] = initBucket();
+
       updateBucket(hourBuckets[hour], result, holdTime);
+      updateBucket(weekdayBuckets[weekday], result, holdTime);
+      updateBucket(dayBuckets[day], result, holdTime);
+
+      activeHourKeys.add(`${day}-${hour}`);
     }
   }
 
@@ -338,12 +393,20 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
     .sort((a, b) => b.pnl - a.pnl);
 
   const hourRows = Object.entries(hourBuckets)
-    .map(([name, bucket]) => finalizeBucket(`${name}:00 UTC`, bucket))
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([name, bucket]) => finalizeBucket(`${name}:00`, bucket));
+
+  const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const weekdayRows = Object.entries(weekdayBuckets)
+    .sort((a, b) => weekdayOrder.indexOf(a[0]) - weekdayOrder.indexOf(b[0]))
+    .map(([name, bucket]) => finalizeBucket(name, bucket));
+
+  const dayRows = Object.entries(dayBuckets)
     .sort(
       (a, b) =>
-        Number.parseInt(a.name.slice(0, 2), 10) -
-        Number.parseInt(b.name.slice(0, 2), 10),
-    );
+        String(a[0]).localeCompare(String(b[0]), 'en', { numeric: true }),
+    )
+    .map(([name, bucket]) => finalizeBucket(name, bucket));
 
   const topAssetByCount = assetRows[0] || null;
   const concentrationPct =
@@ -356,6 +419,46 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
 
   const avgWin = wins ? grossProfit / wins : 0;
   const avgLoss = losses ? grossLoss / losses : 0;
+  const expectancyPerTrade = totalTrades ? pnlSum / totalTrades : 0;
+  const pnlStdDev =
+    totalTrades > 0
+      ? Math.sqrt(
+          pnlValues.reduce(
+            (acc, value) => acc + (value - expectancyPerTrade) ** 2,
+            0,
+          ) / totalTrades,
+        )
+      : 0;
+
+  let firstTradeAt: string | null = null;
+  let lastTradeAt: string | null = null;
+  let tradingSpanHours = 0;
+  let activeDays = 0;
+
+  if (timestamps.length) {
+    timestamps.sort((a, b) => a.getTime() - b.getTime());
+    firstTradeAt = timestamps[0].toISOString();
+    lastTradeAt = timestamps[timestamps.length - 1].toISOString();
+    tradingSpanHours =
+      (timestamps[timestamps.length - 1].getTime() -
+        timestamps[0].getTime()) /
+      36e5;
+    activeDays = new Set(
+      timestamps.map((d) => d.toISOString().slice(0, 10)),
+    ).size;
+  }
+
+  const tradesPerActiveDay = activeDays ? totalTrades / activeDays : 0;
+  const activeTradingHours = activeHourKeys.size;
+  const tradesPerActiveHour =
+    activeTradingHours > 0 ? totalTrades / activeTradingHours : 0;
+
+  const { best: bestAsset, worst: worstAsset } = getBestAndWorst(assetRows);
+  const { best: bestSession, worst: worstSession } =
+    getBestAndWorst(sessionRows);
+  const { best: bestHour, worst: worstHour } = getBestAndWorst(hourRows);
+  const { best: bestWeekday, worst: worstWeekday } =
+    getBestAndWorst(weekdayRows);
 
   const riskFlags: string[] = [];
   if (concentrationPct > 55 && topAssetByCount) {
@@ -363,9 +466,36 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
       `High concentration in ${topAssetByCount.name} (${round(concentrationPct)}%).`,
     );
   }
-  if (totalTrades > 0 && totalTrades >= 20 && (wins / totalTrades) * 100 < 40) {
-    riskFlags.push('Win rate is below 40% over meaningful sample size.');
+  if (maxLossStreak >= 3) {
+    riskFlags.push(
+      `Loss streak risk observed: max ${maxLossStreak} consecutive losing trades.`,
+    );
   }
+  if (losses && (shortLossCount / losses) * 100 > 45) {
+    riskFlags.push(
+      'High ratio of quick losing trades (possible impulse entries/exits).',
+    );
+  }
+  if (tradesPerActiveDay > 18) {
+    riskFlags.push(
+      `Possible overtrading: ${round(tradesPerActiveDay, 1)} trades per active day.`,
+    );
+  }
+  if (pnlStdDev > Math.abs(expectancyPerTrade) * 2.5 && totalTrades >= 12) {
+    riskFlags.push(
+      'Outcome volatility is much higher than average expectancy per trade.',
+    );
+  }
+
+  const consistencyScore = Math.max(
+    0,
+    Math.min(
+      100,
+      0.5 * (totalTrades ? (wins / totalTrades) * 100 : 0) +
+        25 * Math.min(avgWin / (avgLoss || 1), 3) -
+        Math.min(25, pnlStdDev),
+    ),
+  );
 
   return {
     summary: {
@@ -373,39 +503,43 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
       uniqueAssets: assetRows.length,
       winRate: round(totalTrades ? (wins / totalTrades) * 100 : 0),
       totalPnL: round(pnlSum),
-      expectancyPerTrade: round(totalTrades ? pnlSum / totalTrades : 0),
-      consistencyScore: round(
-        Math.max(
-          0,
-          Math.min(
-            100,
-            0.5 * (totalTrades ? (wins / totalTrades) * 100 : 0) +
-              25 * Math.min(avgWin / (avgLoss || 1), 3),
-          ),
-        ),
-      ),
+      expectancyPerTrade: round(expectancyPerTrade),
+      consistencyScore: round(consistencyScore),
     },
     timeAnalysis: {
-      bestHour: [...hourRows].sort((a, b) => b.pnl - a.pnl)[0] || null,
-      worstHour: [...hourRows].sort((a, b) => a.pnl - b.pnl)[0] || null,
+      firstTradeAt,
+      lastTradeAt,
+      tradingSpanHours: round(tradingSpanHours),
+      activeTradingHours,
+      activeDays,
+      tradesPerActiveDay: round(tradesPerActiveDay),
+      tradesPerActiveHour: round(tradesPerActiveHour),
+      bestHour,
+      worstHour,
+      bestWeekday,
+      worstWeekday,
       hourBreakdown: hourRows,
+      weekdayBreakdown: weekdayRows,
+      dailyBreakdown: dayRows,
     },
     assetAnalysis: {
       concentrationPct: round(concentrationPct),
       topAssetByCount,
-      bestAsset: [...assetRows].sort((a, b) => b.pnl - a.pnl)[0] || null,
-      worstAsset: [...assetRows].sort((a, b) => a.pnl - b.pnl)[0] || null,
+      bestAsset,
+      worstAsset,
       assets: assetRows,
     },
     sessionAnalysis: {
-      bestSession: sessionRows[0] || null,
-      worstSession: sessionRows[sessionRows.length - 1] || null,
+      bestSession,
+      worstSession,
       sessions: sessionRows,
     },
     behaviorAnalysis: {
       avgHoldTime: round(totalTrades ? holdTimeSum / totalTrades : 0),
       medianHoldTime: round(percentile(sortedHoldTimes, 0.5)),
       p90HoldTime: round(percentile(sortedHoldTimes, 0.9)),
+      maxWinStreak,
+      maxLossStreak,
       riskFlags,
     },
     qualitySignals: {
@@ -413,6 +547,7 @@ export function buildDeepResearch(trades: AiNormalizedTrade[]) {
       averageLoss: round(avgLoss),
       payoffRatio: round(avgWin / (avgLoss || 1)),
       profitFactor: round(grossProfit / (grossLoss || 1)),
+      pnlStdDev: round(pnlStdDev),
       pnlP10: round(percentile(sortedPnL, 0.1)),
       pnlP50: round(percentile(sortedPnL, 0.5)),
       pnlP90: round(percentile(sortedPnL, 0.9)),
@@ -427,14 +562,19 @@ export function generateActionPlan(
   mistakes: AiMistake[],
 ) {
   const ruleCount = mistakes.reduce<Record<string, number>>((acc, item) => {
-    acc[item.rule] = (acc[item.rule] || 0) + 1;
+    const key = item.rule || 'unknown';
+    acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
+
+  const overtrading = patterns.overtrading;
+  const losingStreaks = patterns.losingStreaks;
 
   const actions: Array<{
     task: string;
     priority: 'high' | 'medium' | 'low';
     reason: string;
+    evidence?: Record<string, unknown>;
     target: string;
   }> = [];
 
@@ -443,6 +583,11 @@ export function generateActionPlan(
       task: 'Increase setup quality filter',
       priority: 'high',
       reason: `Profit factor is ${round(metrics.profitFactor)} (target >= 1.3).`,
+      evidence: {
+        profitFactor: round(metrics.profitFactor),
+        winRate: round(metrics.winRate),
+        totalPnL: round(metrics.totalPnL ?? metrics.pnl),
+      },
       target: 'Raise profit factor to >= 1.3 over next 30 closed trades.',
     });
   }
@@ -455,24 +600,37 @@ export function generateActionPlan(
       task: 'Reduce single-asset concentration',
       priority: 'medium',
       reason: `${deepResearch.assetAnalysis.topAssetByCount.name} dominates execution share.`,
+      evidence: {
+        topAsset: deepResearch.assetAnalysis.topAssetByCount.name,
+        concentrationPct: round(deepResearch.assetAnalysis.concentrationPct),
+      },
       target: 'Keep any single symbol below 40% of total trades.',
     });
   }
 
-  if (patterns.overtrading.isOvertrading) {
+  if (overtrading.isOvertrading) {
     actions.push({
       task: 'Throttle execution frequency',
       priority: 'high',
       reason: 'Overtrading signal detected in daily/hourly density.',
+      evidence: {
+        maxTradesInDay: overtrading.maxTradesInDay,
+        maxTradesInHour: overtrading.maxTradesInHour,
+        avgTradesPerDay: round(overtrading.avgTradesPerDay),
+      },
       target: 'Limit to <= 10 trades/day and <= 3 trades/hour.',
     });
   }
 
-  if ((patterns.losingStreaks.maxLosingStreak || 0) >= 2) {
+  if ((losingStreaks.maxLosingStreak || 0) >= 2) {
     actions.push({
       task: 'Activate losing-streak kill switch',
       priority: 'high',
-      reason: `Max losing streak reached ${patterns.losingStreaks.maxLosingStreak}.`,
+      reason: `Max losing streak reached ${losingStreaks.maxLosingStreak}.`,
+      evidence: {
+        maxLosingStreak: losingStreaks.maxLosingStreak,
+        streakRanges: losingStreaks.streakRanges,
+      },
       target: 'Pause after 2 losses and resume only after checklist pass.',
     });
   }
@@ -482,7 +640,52 @@ export function generateActionPlan(
       task: 'Block high-impact news entries',
       priority: 'high',
       reason: `${ruleCount.enteredDuringNews} trades were entered during news windows.`,
+      evidence: {
+        enteredDuringNewsCount: ruleCount.enteredDuringNews,
+      },
       target: 'Zero high-impact news entries over next 20 trades.',
+    });
+  }
+
+  if ((ruleCount.closedEarly || 0) > 0) {
+    actions.push({
+      task: 'Improve hold-time discipline',
+      priority: 'medium',
+      reason: `${ruleCount.closedEarly} trades were closed earlier than plan.`,
+      evidence: {
+        closedEarlyCount: ruleCount.closedEarly,
+        avgHoldTime: round(metrics.avgHoldTime),
+      },
+      target: 'Reach >= 80% adherence to planned holding window.',
+    });
+  }
+
+  if ((ruleCount.wrongRR || 0) > 0 || (metrics.riskReward || 0) < 1.2) {
+    actions.push({
+      task: 'Enforce minimum risk:reward gate',
+      priority: 'high',
+      reason: `Observed RR is ${round(metrics.riskReward)} with ${ruleCount.wrongRR || 0} low-RR setups.`,
+      evidence: {
+        riskReward: round(metrics.riskReward),
+        wrongRRCount: ruleCount.wrongRR || 0,
+      },
+      target: 'Accept only setups with planned RR >= 1.2.',
+    });
+  }
+
+  if (
+    deepResearch.sessionAnalysis.bestSession?.name &&
+    deepResearch.sessionAnalysis.worstSession?.name
+  ) {
+    actions.push({
+      task: 'Rebalance session allocation',
+      priority: 'medium',
+      reason: `${deepResearch.sessionAnalysis.bestSession.name} outperforms ${deepResearch.sessionAnalysis.worstSession.name} in current sample.`,
+      evidence: {
+        bestSession: deepResearch.sessionAnalysis.bestSession,
+        worstSession: deepResearch.sessionAnalysis.worstSession,
+      },
+      target: `Shift more execution toward ${deepResearch.sessionAnalysis.bestSession.name} until ${deepResearch.sessionAnalysis.worstSession.name} setup quality improves.`,
     });
   }
 
@@ -491,6 +694,10 @@ export function generateActionPlan(
       task: 'Maintain process with weekly review',
       priority: 'low',
       reason: 'No critical risk signals triggered for current sample.',
+      evidence: {
+        profitFactor: round(metrics.profitFactor),
+        riskReward: round(metrics.riskReward),
+      },
       target: 'Sustain metrics while growing sample quality.',
     });
   }
@@ -601,7 +808,12 @@ export function buildFallbackAi(
     },
     deepInsights: {
       assetInsights: deepResearch.assetAnalysis.assets.slice(0, 5),
-      timingInsights: deepResearch.timeAnalysis.hourBreakdown.slice(0, 6),
+      timingInsights: [
+        deepResearch.timeAnalysis.bestHour,
+        deepResearch.timeAnalysis.worstHour,
+        deepResearch.timeAnalysis.bestWeekday,
+        deepResearch.timeAnalysis.worstWeekday,
+      ].filter(Boolean),
       behavioralInsights: [deepResearch.behaviorAnalysis],
       riskInsights: deepResearch.behaviorAnalysis.riskFlags.map(
         (risk: string) => ({ risk }),

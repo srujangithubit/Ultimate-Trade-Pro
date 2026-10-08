@@ -17,6 +17,7 @@ export interface BacktestCandle {
 export interface BacktestSession {
     id: string;
     userId: string;
+    accountId?: string | null;
     instrument: string;
     timeframe: Timeframe;
     timezone?: string;

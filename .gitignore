@@ -1,12 +1,58 @@
+# Dependencies
 node_modules/
+.venv/
+venv/
+**/__pycache__/
+**/*.pyc
+
+# Local environment and secrets
 .env
-*.log
-*.txt
-backend_logs*
-build-log*
-.DS_Store
+.env.*
+!.env.example
+!.env.*.example
+!**/.env.example
+!**/.env.*.example
+
+# Build and test output
 dist/
+.next/
+out/
 coverage/
-*.ps1
 playwright-report/
 test-results/
+.turbo/
+
+# Runtime data and generated artifacts
+*.log
+backend/uploads/
+backend/artifacts/
+*.sqlite
+*.db
+*.bak
+*.tmp
+
+# Local tooling and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Temporary investigation files
+backend_logs*
+build-log*
+frontend_error.txt
+output.txt
+result.json
+tsc_out.txt
+tsc_output.txt
+playbooks_schema.txt
+**/*_output*.txt
+**/*_errors*.txt
+**/*_err*.txt
+**/*_log*.txt
+**/backend_*logs*.txt
+**/test_output*.txt
+**/*-output*.txt
+**/*-errors*.txt
+**/ts-errors.txt
+**/backend_lint_report.txt

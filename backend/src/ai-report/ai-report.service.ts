@@ -20,6 +20,7 @@ import {
 type AiReportTradeRow = {
   id: string;
   accountId: string | null;
+  backtestSessionAccountId?: string | null;
   symbol: string | null;
   setup: string | null;
   entryDate: Date;
@@ -63,6 +64,18 @@ export class AiReportService {
       }
     }
 
+    const allUserAccounts = await this.prisma.tradingAccount.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const canonicalAccountId =
+      allUserAccounts.length === 1
+        ? allUserAccounts[0].id
+        : allUserAccounts.find((acc) => Boolean(acc.accountLogin))?.id ||
+          allUserAccounts[0]?.id ||
+          null;
+
     let trades: AiReportTradeRow[] = [];
     let accounts: Awaited<
       ReturnType<typeof this.prisma.tradingAccount.findMany>
@@ -82,24 +95,32 @@ export class AiReportService {
       }
 
       trades = session.trades
-        .map((trade) => ({
-          id: trade.id,
-          accountId: trade.accountId,
-          symbol: trade.symbol,
-          setup: trade.setup,
-          entryDate: trade.entryDate,
-          exitDate: trade.exitDate,
-          entryPrice: trade.entryPrice,
-          exitPrice: trade.exitPrice,
-          stopLoss: trade.stopLoss,
-          takeProfit: trade.takeProfit,
-          pnlGross: trade.pnlGross,
-          pnlNet: trade.pnlNet,
-          notes: trade.notes,
-          tags: trade.tags,
-          customMetrics: trade.customMetrics,
-          status: trade.status,
-        }))
+        .map((trade) => {
+          const linkedAccountId =
+            trade.accountId ||
+            session.accountId ||
+            canonicalAccountId ||
+            null;
+
+          return {
+            id: trade.id,
+            accountId: linkedAccountId,
+            symbol: trade.symbol,
+            setup: trade.setup,
+            entryDate: trade.entryDate,
+            exitDate: trade.exitDate,
+            entryPrice: trade.entryPrice,
+            exitPrice: trade.exitPrice,
+            stopLoss: trade.stopLoss,
+            takeProfit: trade.takeProfit,
+            pnlGross: trade.pnlGross,
+            pnlNet: trade.pnlNet,
+            notes: trade.notes,
+            tags: trade.tags,
+            customMetrics: trade.customMetrics,
+            status: trade.status,
+          };
+        })
         .filter(
           (trade) =>
             trade.status === 'CLOSED' &&
@@ -107,23 +128,29 @@ export class AiReportService {
         );
 
       accounts = await this.prisma.tradingAccount.findMany({
-        where: {
-          userId,
-          ...(resolvedAccountId ? { id: resolvedAccountId } : {}),
-        },
-        orderBy: { createdAt: 'asc' },
+        where: { id: { in: allUserAccounts.map((acc) => acc.id) } },
       });
+
+      if (resolvedAccountId) {
+        accounts = accounts.filter((acc) => acc.id === resolvedAccountId);
+      }
     } else {
-      [trades, accounts] = await Promise.all([
+      const [rawTrades, fetchedAccounts] = await Promise.all([
         this.prisma.trade.findMany({
           where: {
             userId,
             status: 'CLOSED',
-            ...(accountId ? { accountId } : {}),
+            backtestSessionId: null,
           },
           select: {
             id: true,
             accountId: true,
+            backtestSessionId: true,
+            backtestSession: {
+              select: {
+                accountId: true,
+              },
+            },
             symbol: true,
             setup: true,
             entryDate: true,
@@ -141,14 +168,39 @@ export class AiReportService {
           },
           orderBy: { entryDate: 'asc' },
         }),
-        this.prisma.tradingAccount.findMany({
-          where: {
-            userId,
-            ...(accountId ? { id: accountId } : {}),
-          },
-          orderBy: { createdAt: 'asc' },
-        }),
+        Promise.resolve(allUserAccounts),
       ]);
+
+      trades = rawTrades
+        .map((trade) => {
+          const linkedAccountId = trade.accountId || null;
+
+          return {
+            id: trade.id,
+            accountId: linkedAccountId,
+            backtestSessionAccountId: null,
+            symbol: trade.symbol,
+            setup: trade.setup,
+            entryDate: trade.entryDate,
+            exitDate: trade.exitDate,
+            entryPrice: trade.entryPrice,
+            exitPrice: trade.exitPrice,
+            stopLoss: trade.stopLoss,
+            takeProfit: trade.takeProfit,
+            pnlGross: trade.pnlGross,
+            pnlNet: trade.pnlNet,
+            notes: trade.notes,
+            tags: trade.tags,
+            customMetrics: trade.customMetrics,
+            status: trade.status,
+          };
+        })
+        .filter((trade) => !accountId || trade.accountId === accountId);
+
+      accounts = fetchedAccounts;
+      if (accountId) {
+        accounts = accounts.filter((acc) => acc.id === accountId);
+      }
     }
 
     const normalizedTrades: AiNormalizedTrade[] = trades.map((trade) => {
@@ -238,10 +290,8 @@ export class AiReportService {
 
     const accountsSnapshot = {
       totalAccounts: accounts.length,
-      connectedAccounts: accounts.filter((acc) => {
-        if (!acc.lastSeen) return false;
-        return Date.now() - new Date(acc.lastSeen).getTime() < 90_000;
-      }).length,
+      connectedAccounts: accounts.filter((acc) => this.isAccountConnected(acc))
+        .length,
       totalBalance: accounts.reduce(
         (sum, acc) => sum + this.toNumber(acc.balance),
         0,
@@ -259,10 +309,7 @@ export class AiReportService {
         balance: this.toNumber(acc.balance),
         equity: this.toNumber(acc.equity),
         active: acc.active,
-        status:
-          acc.lastSeen && Date.now() - new Date(acc.lastSeen).getTime() < 90_000
-            ? 'CONNECTED'
-            : 'OFFLINE',
+        status: this.isAccountConnected(acc) ? 'CONNECTED' : 'OFFLINE',
         closedTradeCount: accountTradeCountById.get(acc.id) || 0,
         totalPnl: accountPnlById.get(acc.id) || 0,
       })),
@@ -541,6 +588,28 @@ Return ONLY valid JSON with this exact shape:
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
+  }
+
+  private isAccountConnected(account: {
+    lastSeen: Date | null;
+    accountLogin: string | null;
+    server: string | null;
+    balance: unknown;
+    equity: unknown;
+  }): boolean {
+    if (account.lastSeen) {
+      // Less aggressive offline threshold to avoid flapping in dashboard views.
+      if (Date.now() - new Date(account.lastSeen).getTime() < 15 * 60_000) {
+        return true;
+      }
+    }
+
+    const hasMt5Identity =
+      Boolean(account.accountLogin?.trim()) && Boolean(account.server?.trim());
+    const hasAccountValue =
+      this.toNumber(account.balance) > 0 || this.toNumber(account.equity) > 0;
+
+    return hasMt5Identity && hasAccountValue;
   }
 
   private isUuid(value: string): boolean {

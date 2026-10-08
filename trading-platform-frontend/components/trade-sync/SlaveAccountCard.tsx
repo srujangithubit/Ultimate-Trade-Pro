@@ -38,7 +38,7 @@ export default function SlaveAccountCard({
   index,
   onConfigOpen,
 }: SlaveAccountCardProps) {
-  const { liveEquity } = useTradeSyncStore();
+  const { liveEquity, livePositions } = useTradeSyncStore();
   const pauseMutation = usePauseSlave();
   const resumeMutation = useResumeSlave();
   const deleteMutation = useDeleteSlave();
@@ -46,7 +46,13 @@ export default function SlaveAccountCard({
   const live = liveEquity[slave.id];
   const equity = Number(live?.equity ?? slave.equity) || 0;
   const balance = Number(live?.balance ?? slave.balance) || 0;
-  const floatingPnL = Number(live?.floatingPnL ?? slave.floatingPnL) || 0;
+  const positionPnL =
+    livePositions[slave.id] && Number.isFinite(livePositions[slave.id].totalPnL)
+      ? Number(livePositions[slave.id].totalPnL)
+      : 0;
+  const floatingPnL =
+    Number(live?.floatingPnL ?? slave.floatingPnL) || positionPnL;
+  const isConnected = Boolean(slave.isConnected || live);
 
   const handleDelete = () => {
     if (
@@ -71,7 +77,7 @@ export default function SlaveAccountCard({
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div className="flex items-center gap-2">
-            {slave.isConnected ? (
+            {isConnected ? (
               <Wifi className="h-4 w-4 text-green-500" />
             ) : (
               <WifiOff className="h-4 w-4 text-red-500" />

@@ -101,7 +101,7 @@ class MT5WebSocketServer:
 
             elif action == "query_account":
                 login = int(data["login"])
-                password = data["password"]
+                password = data.get("password")
                 server = data["server"]
                 async with self._mt5_lock:
                     info = self.mt5.query_account(login, password, server)
@@ -113,7 +113,7 @@ class MT5WebSocketServer:
 
             elif action == "query_positions":
                 login = int(data["login"])
-                password = data["password"]
+                password = data.get("password")
                 server = data["server"]
                 async with self._mt5_lock:
                     positions = self.mt5.query_positions(login, password, server)

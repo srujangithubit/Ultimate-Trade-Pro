@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsDateString } from 'class-validator';
 
 export class CreateAccountDto {
   @IsString()
@@ -15,6 +15,26 @@ export class CreateAccountDto {
   @IsOptional()
   @IsString()
   currency?: string;
+
+  @IsOptional()
+  @IsString()
+  server?: string;
+
+  @IsOptional()
+  @IsString()
+  accountLogin?: string;
+
+  @IsOptional()
+  @IsNumber()
+  balance?: number;
+
+  @IsOptional()
+  @IsNumber()
+  equity?: number;
+
+  @IsOptional()
+  @IsDateString()
+  lastSeen?: string;
 }
 
 export class UpdateAccountDto {
@@ -25,4 +45,32 @@ export class UpdateAccountDto {
   @IsOptional()
   @IsString()
   broker?: string;
+
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
+  @IsString()
+  accountType?: string;
+
+  @IsOptional()
+  @IsString()
+  server?: string;
+
+  @IsOptional()
+  @IsString()
+  accountLogin?: string;
+
+  @IsOptional()
+  @IsNumber()
+  balance?: number;
+
+  @IsOptional()
+  @IsNumber()
+  equity?: number;
+
+  @IsOptional()
+  @IsDateString()
+  lastSeen?: string;
 }

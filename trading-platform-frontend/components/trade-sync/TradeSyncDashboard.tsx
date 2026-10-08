@@ -38,7 +38,14 @@ interface TradeSyncDashboardProps {
 export default function TradeSyncDashboard({
   syncGroupId,
 }: TradeSyncDashboardProps) {
-  const { setView, setActiveGroupId, setAddSlaveOpen, liveEquity, socketConnected } =
+  const {
+    setView,
+    setActiveGroupId,
+    setAddSlaveOpen,
+    liveEquity,
+    livePositions,
+    socketConnected,
+  } =
     useTradeSyncStore();
   const { data: group, isLoading } = useSyncGroup(syncGroupId);
   const { data: performance } = useGroupPerformance(syncGroupId);
@@ -63,7 +70,13 @@ export default function TradeSyncDashboard({
   const masterLive = master ? liveEquity[master.id] : null;
   const masterEquity = Number(masterLive?.equity ?? master?.equity) || 0;
   const masterBalance = Number(masterLive?.balance ?? master?.balance) || 0;
-  const masterPnL = Number(masterLive?.floatingPnL ?? master?.floatingPnL) || 0;
+  const masterPositionsPnL =
+    master && livePositions[master.id]
+      ? Number(livePositions[master.id].totalPnL) || 0
+      : 0;
+  const masterPnL =
+    Number(masterLive?.floatingPnL ?? master?.floatingPnL) || masterPositionsPnL;
+  const masterIsConnected = Boolean(master?.isConnected || masterLive);
 
   const riskSlave = slaves.find((s) => s.id === riskSlaveId) ?? null;
 
@@ -118,7 +131,7 @@ export default function TradeSyncDashboard({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              {master.isConnected ? (
+              {masterIsConnected ? (
                 <Wifi className="h-4 w-4 text-green-500" />
               ) : (
                 <WifiOff className="h-4 w-4 text-red-500" />

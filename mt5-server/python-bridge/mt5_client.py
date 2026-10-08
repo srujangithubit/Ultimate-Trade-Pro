@@ -169,6 +169,7 @@ class MT5Client:
             server=info.server,
             balance=info.balance,
             equity=info.equity,
+            profit=getattr(info, "profit", info.equity - info.balance),
             margin=info.margin,
             free_margin=info.margin_free,
             leverage=info.leverage,
@@ -176,7 +177,7 @@ class MT5Client:
             name=info.name,
         )
 
-    def query_account(self, login: int, password: str, server: str) -> AccountInfo | None:
+    def query_account(self, login: int, password: str | None, server: str) -> AccountInfo | None:
         """Temporarily switch to another account, fetch its info, then switch back.
 
         This allows querying equity/balance for slave accounts on different
@@ -192,7 +193,12 @@ class MT5Client:
 
         try:
             # Switch to the target account
-            if not mt5.login(login, password=password, server=server):
+            authorized = (
+                mt5.login(login, password=password, server=server)
+                if password
+                else mt5.login(login, server=server)
+            )
+            if not authorized:
                 logger.warning("Cannot login to account %d@%s: %s", login, server, mt5.last_error())
                 return None
 
@@ -205,6 +211,7 @@ class MT5Client:
                 server=info.server,
                 balance=info.balance,
                 equity=info.equity,
+                profit=getattr(info, "profit", info.equity - info.balance),
                 margin=info.margin,
                 free_margin=info.margin_free,
                 leverage=info.leverage,
@@ -251,7 +258,7 @@ class MT5Client:
             for pos in positions
         ]
 
-    def query_positions(self, login: int, password: str, server: str) -> list[TradePosition] | None:
+    def query_positions(self, login: int, password: str | None, server: str) -> list[TradePosition] | None:
         """Temporarily switch to another account, fetch its positions, then switch back.
 
         Returns None on login failure so the caller can distinguish
@@ -262,7 +269,12 @@ class MT5Client:
 
         try:
             # Switch to the target account
-            if not mt5.login(login, password=password, server=server):
+            authorized = (
+                mt5.login(login, password=password, server=server)
+                if password
+                else mt5.login(login, server=server)
+            )
+            if not authorized:
                 logger.warning("Cannot login to account %d@%s for positions: %s", login, server, mt5.last_error())
                 return None
 

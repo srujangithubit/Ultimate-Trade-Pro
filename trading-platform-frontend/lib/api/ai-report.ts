@@ -4,7 +4,21 @@ export interface AiActionItem {
   task: string;
   priority: 'high' | 'medium' | 'low';
   reason: string;
+  evidence?: Record<string, unknown>;
   target: string;
+}
+
+interface BreakdownRow {
+  name: string;
+  count: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  pnl: number;
+  avgHoldTime: number;
+  profitFactor: number;
+  maxWin?: number;
+  maxLoss?: number;
 }
 
 export interface AiReportResponse {
@@ -44,22 +58,51 @@ export interface AiReportResponse {
       expectancyPerTrade: number;
       consistencyScore: number;
     };
+    timeAnalysis: {
+      firstTradeAt: string | null;
+      lastTradeAt: string | null;
+      tradingSpanHours: number;
+      activeTradingHours: number;
+      activeDays: number;
+      tradesPerActiveDay: number;
+      tradesPerActiveHour: number;
+      bestHour: BreakdownRow | null;
+      worstHour: BreakdownRow | null;
+      bestWeekday: BreakdownRow | null;
+      worstWeekday: BreakdownRow | null;
+      hourBreakdown: BreakdownRow[];
+      weekdayBreakdown: BreakdownRow[];
+      dailyBreakdown: BreakdownRow[];
+    };
     assetAnalysis: {
       concentrationPct: number;
-      assets: Array<{ name: string; count: number; pnl: number; winRate: number; profitFactor: number }>;
-      bestAsset: { name: string; pnl: number } | null;
-      worstAsset: { name: string; pnl: number } | null;
+      topAssetByCount: BreakdownRow | null;
+      assets: BreakdownRow[];
+      bestAsset: BreakdownRow | null;
+      worstAsset: BreakdownRow | null;
     };
     sessionAnalysis: {
-      bestSession: { name: string; pnl: number; winRate: number } | null;
-      worstSession: { name: string; pnl: number; winRate: number } | null;
-      sessions: Array<{ name: string; pnl: number; winRate: number; count: number }>;
+      bestSession: BreakdownRow | null;
+      worstSession: BreakdownRow | null;
+      sessions: BreakdownRow[];
     };
     behaviorAnalysis: {
       avgHoldTime: number;
       medianHoldTime: number;
       p90HoldTime: number;
+      maxWinStreak: number;
+      maxLossStreak: number;
       riskFlags: string[];
+    };
+    qualitySignals: {
+      averageWin: number;
+      averageLoss: number;
+      payoffRatio: number;
+      profitFactor: number;
+      pnlStdDev: number;
+      pnlP10: number;
+      pnlP50: number;
+      pnlP90: number;
     };
   };
   ai: {
@@ -68,6 +111,10 @@ export interface AiReportResponse {
     strengths: unknown[];
     actions: unknown[];
     deepInsights?: {
+      assetInsights?: unknown[];
+      timingInsights?: unknown[];
+      behavioralInsights?: unknown[];
+      riskInsights?: unknown[];
       executionPlan?: unknown[];
     };
     insights?: {

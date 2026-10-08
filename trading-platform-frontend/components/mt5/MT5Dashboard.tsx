@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Wifi,
   WifiOff,
@@ -50,6 +50,8 @@ import MT5LiveTrades from './MT5LiveTrades';
 import MT5TradeHistory from './MT5TradeHistory';
 import MT5Analytics from './MT5Analytics';
 import PriceAlertManager from './PriceAlertManager';
+import { toast } from 'sonner';
+import { accountsApi } from '@/lib/api/accounts';
 import {
   useMT5Accounts,
   type SavedMT5Account,
@@ -298,6 +300,126 @@ function MT5DashboardContent({ activeTab = 'trading' }: { activeTab?: 'trading' 
   const [switchPassword, setSwitchPassword] = useState('');
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const syncedAccountsRef = useRef<Set<string>>(new Set());
+  const syncedLiveSnapshotRef = useRef<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncSavedAccountsToBackend() {
+      for (const saved of savedAccounts) {
+        const syncKey = `${saved.server}:${saved.login}`;
+        if (syncedAccountsRef.current.has(syncKey)) {
+          continue;
+        }
+
+        try {
+          await accountsApi.create({
+            name: saved.label || `${saved.server} #${saved.login}`,
+            broker: saved.server,
+            accountType: 'live',
+            server: saved.server,
+            accountLogin: String(saved.login),
+          });
+
+          if (!cancelled) {
+            syncedAccountsRef.current.add(syncKey);
+          }
+        } catch {
+          // Keep silent in background sync to avoid noisy toasts.
+        }
+      }
+    }
+
+    void syncSavedAccountsToBackend();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [savedAccounts]);
+
+  useEffect(() => {
+    if (!status.authenticated || !account) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function syncLiveAccountSnapshotToBackend() {
+      if (!account) return;
+      const server = (account.server || '').trim();
+      const login = String(account.login || '').trim();
+      if (!server || !login) {
+        return;
+      }
+
+      const balance = Number(account.balance) || 0;
+      const equity = Number(account.equity) || 0;
+      const snapshotKey = `${server}:${login}:${balance}:${equity}`;
+      if (syncedLiveSnapshotRef.current === snapshotKey) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+
+      try {
+        const existingAccounts = await accountsApi.getAll();
+        const existing = existingAccounts.find(
+          (item) =>
+            (item.server || '').trim() === server &&
+            (item.accountLogin || '').trim() === login,
+        );
+
+        if (existing) {
+          await accountsApi.update(existing.id, {
+            name: existing.name || account.name || `${server} #${login}`,
+            broker: server,
+            accountType: existing.accountType || 'live',
+            currency: account.currency || existing.currency,
+            server,
+            accountLogin: login,
+            balance,
+            equity,
+            lastSeen: nowIso,
+          });
+        } else {
+          await accountsApi.create({
+            name: account.name || `${server} #${login}`,
+            broker: server,
+            accountType: 'live',
+            currency: account.currency || 'USD',
+            server,
+            accountLogin: login,
+            balance,
+            equity,
+            lastSeen: nowIso,
+          });
+        }
+
+        if (!cancelled) {
+          syncedLiveSnapshotRef.current = snapshotKey;
+          syncedAccountsRef.current.add(`${server}:${login}`);
+        }
+      } catch {
+        // Keep silent to avoid noisy toasts during periodic refreshes.
+      }
+    }
+
+    void syncLiveAccountSnapshotToBackend();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    status.authenticated,
+    account?.server,
+    account?.login,
+    account?.balance,
+    account?.equity,
+    account?.currency,
+    account?.name,
+    account,
+  ]);
 
   // Handle connecting to a saved account (needs password)
   const handleConnectSaved = (acc: SavedMT5Account) => {
@@ -337,7 +459,7 @@ function MT5DashboardContent({ activeTab = 'trading' }: { activeTab?: 'trading' 
   };
 
   // Called when user successfully adds a new account via the MT5ConnectDialog
-  const handleNewAccountConnected = (
+  const handleNewAccountConnected = async (
     server: string,
     login: number,
     label?: string,
@@ -345,6 +467,23 @@ function MT5DashboardContent({ activeTab = 'trading' }: { activeTab?: 'trading' 
     const saved = addAccount(label || `${server} #${login}`, server, login);
     if (saved) {
       markConnected(saved.id);
+    }
+
+    try {
+      await accountsApi.create({
+        name: label || `${server} #${login}`,
+        broker: server,
+        accountType: 'live',
+        server,
+        accountLogin: String(login),
+      });
+    } catch (error) {
+      const message =
+        (error as { response?: { data?: { message?: string } } })?.response
+          ?.data?.message ||
+        (error as Error)?.message ||
+        'Failed to save MT5 account to backend';
+      toast.error(message);
     }
   };
 

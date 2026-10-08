@@ -84,14 +84,20 @@ module.exports = function createMT5Router(gateway, alertService, internalApiKey)
    */
   router.get("/account/:accountNumber", async (req, res) => {
     try {
-      const { login, password, server } = req.query;
-      if (!login || !password || !server) {
+      const loginRaw = req.query.login || req.params.accountNumber;
+      const { password, server } = req.query;
+      if (!loginRaw || !server) {
         return res.status(400).json({
-          error: "Missing required query params: login, password, server",
+          error: "Missing required query params: server (and optional login/password)",
         });
       }
 
-      gateway.queryAccount(parseInt(login), password, server);
+      const login = parseInt(String(loginRaw), 10);
+      if (Number.isNaN(login)) {
+        return res.status(400).json({ error: "Invalid login" });
+      }
+
+      gateway.queryAccount(login, password ? String(password) : undefined, String(server));
 
       const data = await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error("Timeout")), 15000);
@@ -117,14 +123,20 @@ module.exports = function createMT5Router(gateway, alertService, internalApiKey)
    */
   router.get("/positions/:accountNumber", async (req, res) => {
     try {
-      const { login, password, server } = req.query;
-      if (!login || !password || !server) {
+      const loginRaw = req.query.login || req.params.accountNumber;
+      const { password, server } = req.query;
+      if (!loginRaw || !server) {
         return res.status(400).json({
-          error: "Missing required query params: login, password, server",
+          error: "Missing required query params: server (and optional login/password)",
         });
       }
 
-      gateway.queryPositions(parseInt(login), password, server);
+      const login = parseInt(String(loginRaw), 10);
+      if (Number.isNaN(login)) {
+        return res.status(400).json({ error: "Invalid login" });
+      }
+
+      gateway.queryPositions(login, password ? String(password) : undefined, String(server));
 
       const result = await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error("Timeout")), 15000);

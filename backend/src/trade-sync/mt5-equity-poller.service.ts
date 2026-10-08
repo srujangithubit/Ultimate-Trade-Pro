@@ -26,6 +26,9 @@ export class Mt5EquityPollerService implements OnModuleInit, OnModuleDestroy {
   private readonly mt5BaseUrl: string;
   private readonly pollIntervalMs: number;
   private readonly mt5InternalApiKey: string;
+  private readonly masterMt5Password: string;
+  private readonly snapshotRetryCooldownMs = 90_000;
+  private readonly snapshotAttemptAt = new Map<string, number>();
   private polling = false;
 
   constructor(
@@ -39,6 +42,8 @@ export class Mt5EquityPollerService implements OnModuleInit, OnModuleDestroy {
       'http://localhost:3001';
     this.mt5InternalApiKey =
       this.configService.get<string>('MT5_INTERNAL_API_KEY') || '';
+    this.masterMt5Password =
+      this.configService.get<string>('MASTER_MT5_PASSWORD') || '';
     this.pollIntervalMs =
       parseInt(
         this.configService.get<string>('MT5_POLL_INTERVAL_MS') || '3000',
@@ -79,7 +84,34 @@ export class Mt5EquityPollerService implements OnModuleInit, OnModuleDestroy {
       const loginStr = String(accountData.login);
       const equityNum = Number(accountData.equity) || 0;
       const balanceNum = Number(accountData.balance) || 0;
-      const profitNum = Number(accountData.profit) || 0;
+      const profitCandidate = Number(accountData.profit);
+      const profitNum = Number.isFinite(profitCandidate)
+        ? profitCandidate
+        : equityNum - balanceNum;
+      const serverStr = accountData.server?.trim() || null;
+      const currencyStr = accountData.currency?.trim() || null;
+
+      // Also persist live MT5 snapshot into trading accounts used by AI Report.
+      // This keeps account balance/equity fresh even when MT5 EA heartbeat is not active.
+      const accountInJournal = await this.prisma.tradingAccount.findFirst({
+        where: { accountLogin: loginStr },
+        select: { id: true },
+      });
+
+      if (accountInJournal) {
+        await this.prisma.tradingAccount.update({
+          where: { id: accountInJournal.id },
+          data: {
+            balance: balanceNum,
+            equity: equityNum,
+            lastSeen: new Date(),
+            ...(serverStr ? { server: serverStr } : {}),
+            ...(currencyStr ? { currency: currencyStr } : {}),
+          },
+        });
+      }
+
+      await this.refreshAllTradingAccountSnapshots(loginStr, serverStr || undefined);
 
       // Track which sync groups were updated so we can update slaves
       const updatedSyncGroupIds: string[] = [];
@@ -248,6 +280,105 @@ export class Mt5EquityPollerService implements OnModuleInit, OnModuleDestroy {
         return null;
       }
       throw err;
+    }
+  }
+
+  private async refreshAllTradingAccountSnapshots(
+    connectedLogin: string,
+    connectedServer?: string,
+  ): Promise<void> {
+    const ownerMasterAccounts = await this.prisma.masterAccount.findMany({
+      where: { accountNumber: connectedLogin },
+      select: { userId: true },
+    });
+
+    const ownerUserIds = Array.from(
+      new Set(ownerMasterAccounts.map((row) => row.userId).filter(Boolean)),
+    );
+
+    if (ownerUserIds.length === 0) {
+      return;
+    }
+
+    const candidates = await this.prisma.tradingAccount.findMany({
+      where: {
+        userId: { in: ownerUserIds },
+        accountLogin: { not: null },
+        server: { not: null },
+        ...(connectedServer ? { server: connectedServer } : {}),
+      },
+      select: {
+        id: true,
+        accountLogin: true,
+        server: true,
+      },
+    });
+
+    for (const account of candidates) {
+      const login = account.accountLogin?.trim();
+      const server = account.server?.trim();
+      if (!login || !server) {
+        continue;
+      }
+
+      // Already refreshed by the primary /account poll.
+      if (login === connectedLogin) {
+        continue;
+      }
+
+      const now = Date.now();
+      const retryKey = `${account.id}:${login}:${server}`;
+      const lastAttempt = this.snapshotAttemptAt.get(retryKey) || 0;
+      if (now - lastAttempt < this.snapshotRetryCooldownMs) {
+        continue;
+      }
+      this.snapshotAttemptAt.set(retryKey, now);
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+
+        const params = new URLSearchParams({ server });
+        if (this.masterMt5Password) {
+          params.set('password', this.masterMt5Password);
+        }
+
+        const response = await fetch(
+          `${this.mt5BaseUrl}/api/mt5/account/${encodeURIComponent(login)}?${params.toString()}`,
+          {
+            signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${this.mt5InternalApiKey}`,
+            },
+          },
+        );
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const json = (await response.json()) as { data?: Mt5AccountInfo };
+        if (!json.data) {
+          continue;
+        }
+
+        await this.prisma.tradingAccount.update({
+          where: { id: account.id },
+          data: {
+            balance: Number(json.data.balance) || 0,
+            equity: Number(json.data.equity) || 0,
+            lastSeen: new Date(),
+            server: json.data.server?.trim() || server,
+            ...(json.data.currency?.trim()
+              ? { currency: json.data.currency.trim() }
+              : {}),
+          },
+        });
+      } catch {
+        // Ignore per-account query errors; these accounts may require a fresh login.
+      }
     }
   }
 }

@@ -48,8 +48,13 @@ export const accountsApi = {
     create: async (payload: {
         name?: string;
         broker?: string;
+        accountType?: string;
+        currency?: string;
         server: string;
         accountLogin: string;
+        balance?: number;
+        equity?: number;
+        lastSeen?: string;
         password?: string;
     }): Promise<Account> => {
         const { data } = await api.post<Account>('/accounts', payload);
@@ -58,7 +63,17 @@ export const accountsApi = {
 
     update: async (
         id: string,
-        payload: { name?: string; broker?: string },
+        payload: {
+            name?: string;
+            broker?: string;
+            accountType?: string;
+            currency?: string;
+            server?: string;
+            accountLogin?: string;
+            balance?: number;
+            equity?: number;
+            lastSeen?: string;
+        },
     ): Promise<Account> => {
         const { data } = await api.patch<Account>(`/accounts/${id}`, payload);
         return data;

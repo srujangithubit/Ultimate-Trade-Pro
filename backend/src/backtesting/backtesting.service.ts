@@ -229,6 +229,29 @@ export class BacktestingService implements OnModuleDestroy {
     }
   }
 
+  private async resolvePreferredAccountId(userId: string): Promise<string | null> {
+    const preferred = await this.prisma.tradingAccount.findFirst({
+      where: {
+        userId,
+        active: true,
+      },
+      orderBy: [{ createdAt: 'asc' }],
+      select: { id: true },
+    });
+
+    if (preferred?.id) {
+      return preferred.id;
+    }
+
+    const fallback = await this.prisma.tradingAccount.findFirst({
+      where: { userId },
+      orderBy: [{ createdAt: 'asc' }],
+      select: { id: true },
+    });
+
+    return fallback?.id || null;
+  }
+
   // ─── REPLAY ENGINE CONTROL ───────────────────────────────────────
 
   async playSession(
@@ -505,11 +528,15 @@ export class BacktestingService implements OnModuleDestroy {
   // ─── SESSION CRUD ────────────────────────────────────────────────
 
   async createSession(userId: string, dto: CreateSessionDto) {
+    const fallbackAccountId = dto.accountId
+      ? null
+      : await this.resolvePreferredAccountId(userId);
+
     return this.prisma.backtestingSession.create({
       data: {
         userId,
         name: dto.sessionName,
-        accountId: dto.accountId ?? null,
+        accountId: dto.accountId ?? fallbackAccountId ?? null,
         status: 'created',
         configuration: {
           instrument: dto.instrument,
@@ -581,10 +608,13 @@ export class BacktestingService implements OnModuleDestroy {
       }
     }
 
+    const resolvedAccountId =
+      session.accountId || (await this.resolvePreferredAccountId(userId));
+
     const trade = await this.prisma.trade.create({
       data: {
         userId,
-        accountId: session.accountId ?? undefined,
+        accountId: resolvedAccountId ?? undefined,
         backtestSessionId: sessionId,
         symbol: String(config.instrument),
         direction: dto.direction,
