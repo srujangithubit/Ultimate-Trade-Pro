@@ -52,6 +52,16 @@ const CHART_THEMES = {
 const MT5_API_URL = process.env.NEXT_PUBLIC_MT5_API_URL || 'http://localhost:3001';
 // Backend API URL (port 3000) — serves candles from DB
 const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const MT5_INTERNAL_API_KEY = process.env.NEXT_PUBLIC_MT5_INTERNAL_API_KEY || '';
+
+function getMt5RequestHeaders(): HeadersInit {
+    const key = MT5_INTERNAL_API_KEY
+        || (typeof window !== 'undefined'
+            ? window.localStorage.getItem('mt5_internal_api_key') || ''
+            : '');
+
+    return key ? { Authorization: `Bearer ${key}` } : {};
+}
 
 interface CandleChartProps {
     symbol: string;
@@ -388,7 +398,9 @@ export default function CandleChart({
         };
 
         // Primary: MT5 live server (real-time, freshest data)
-        fetch(`${MT5_API_URL}/api/mt5/ohlcv?symbol=${symbol}&timeframe=${mt5Timeframe}&bars=300`)
+        fetch(`${MT5_API_URL}/api/mt5/ohlcv?symbol=${symbol}&timeframe=${mt5Timeframe}&bars=300`, {
+            headers: getMt5RequestHeaders(),
+        })
             .then((res) => {
                 if (!res.ok) throw new Error(`MT5 HTTP ${res.status}`);
                 return res.json();
