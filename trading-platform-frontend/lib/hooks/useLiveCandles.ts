@@ -45,10 +45,24 @@ export function useLiveCandles(
             if (tick.symbol !== symbol) return;
 
             const intervalMs = TIMEFRAME_MS[timeframe] || 300_000;
-            const tickTime = typeof tick.time === 'string' ? new Date(tick.time).getTime() : tick.time;
+            const rawTickTime = typeof tick.time === 'string'
+                ? new Date(tick.time).getTime()
+                : tick.time;
+            const tickTime = rawTickTime > 10_000_000_000
+                ? rawTickTime
+                : rawTickTime * 1000;
+            if (!Number.isFinite(tickTime)) return;
+
             const periodStart = Math.floor(tickTime / intervalMs) * intervalMs;
-            const price = tick.last || (tick.bid + tick.ask) / 2;
-            const volume = tick.volume || 1;
+            const bid = Number(tick.bid);
+            const ask = Number(tick.ask);
+            const last = Number(tick.last);
+            const price = Number.isFinite(last) && last > 0
+                ? last
+                : (bid + ask) / 2;
+            const volume = Number(tick.volume);
+            if (!Number.isFinite(price) || price <= 0) return;
+            const tickVolume = Number.isFinite(volume) && volume > 0 ? volume : 1;
 
             const existing = activeCandle.current;
 
@@ -57,7 +71,7 @@ export function useLiveCandles(
                 existing.high = Math.max(existing.high, price);
                 existing.low = Math.min(existing.low, price);
                 existing.close = price;
-                existing.volume += volume;
+                existing.volume += tickVolume;
 
                 onCandleUpdateRef.current({
                     time: Math.floor(periodStart / 1000),
@@ -86,7 +100,7 @@ export function useLiveCandles(
                     high: price,
                     low: price,
                     close: price,
-                    volume,
+                    volume: tickVolume,
                     periodStart,
                 };
                 activeCandle.current = newCandle;

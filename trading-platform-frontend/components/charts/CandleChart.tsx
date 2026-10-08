@@ -267,7 +267,7 @@ export default function CandleChart({
 
         // Helper: process raw candles into chart data
         const processCandles = (rawCandles: Array<{
-            time: string;
+            time: string | number;
             open: number;
             high: number;
             low: number;
@@ -282,17 +282,54 @@ export default function CandleChart({
                 return;
             }
 
-            const candleData = rawCandles.map((c) => ({
-                time: Math.floor(new Date(c.time).getTime() / 1000) as UTCTimestamp,
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                close: c.close,
-            }));
+            // MT5 returns rates newest-first. Lightweight Charts requires
+            // strictly ascending, unique timestamps.
+            const candlesByTime = new Map<number, {
+                time: UTCTimestamp;
+                open: number;
+                high: number;
+                low: number;
+                close: number;
+                volume: number;
+            }>();
 
-            const volumeData = rawCandles.map((c, i) => ({
-                time: candleData[i].time,
-                value: c.tick_volume,
+            for (const candle of rawCandles) {
+                const rawTime = typeof candle.time === 'number'
+                    ? candle.time
+                    : new Date(candle.time).getTime();
+                const time = Math.floor((rawTime > 10_000_000_000 ? rawTime : rawTime * 1000) / 1000);
+
+                if (
+                    !Number.isFinite(time) ||
+                    !Number.isFinite(candle.open) ||
+                    !Number.isFinite(candle.high) ||
+                    !Number.isFinite(candle.low) ||
+                    !Number.isFinite(candle.close)
+                ) {
+                    continue;
+                }
+
+                candlesByTime.set(time, {
+                    time: time as UTCTimestamp,
+                    open: candle.open,
+                    high: candle.high,
+                    low: candle.low,
+                    close: candle.close,
+                    volume: Number.isFinite(candle.tick_volume) ? candle.tick_volume : 0,
+                });
+            }
+
+            const candleData = [...candlesByTime.values()].sort((a, b) => a.time - b.time);
+
+            if (candleData.length === 0) {
+                console.warn(`[CandleChart] No valid OHLCV data for ${symbol} ${mt5Timeframe}`);
+                setIsLoading(false);
+                return;
+            }
+
+            const volumeData = candleData.map((c) => ({
+                time: c.time,
+                value: c.volume,
                 color: c.close >= c.open ? 'rgba(0, 212, 170, 0.2)' : 'rgba(255, 68, 68, 0.2)',
             }));
 
