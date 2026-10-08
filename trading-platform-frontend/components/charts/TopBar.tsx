@@ -12,13 +12,23 @@ const TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
 
 interface TopBarProps {
     gridMode: '1x1' | '2x2';
+    chartProvider: 'native' | 'tradingview';
     onGridModeToggle: () => void;
+    onChartProviderToggle: () => void;
     connectionStatus: ConnectionStatus;
     latencyMs: number;
     onAlertClick?: () => void;
 }
 
-export default function TopBar({ gridMode, onGridModeToggle, connectionStatus, latencyMs, onAlertClick }: TopBarProps) {
+export default function TopBar({
+    gridMode,
+    chartProvider,
+    onGridModeToggle,
+    onChartProviderToggle,
+    connectionStatus,
+    latencyMs,
+    onAlertClick,
+}: TopBarProps) {
     const {
         activeSymbol,
         timeframe,
@@ -95,6 +105,17 @@ export default function TopBar({ gridMode, onGridModeToggle, connectionStatus, l
                         </button>
                     ))}
                 </div>
+
+                <button
+                    type="button"
+                    onClick={onChartProviderToggle}
+                    title={chartProvider === 'native'
+                        ? 'Switch to TradingView chart'
+                        : 'Switch to native MT5 chart'}
+                    className="rounded border border-border px-2.5 py-1 text-[10px] font-mono font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                    {chartProvider === 'native' ? 'TV' : 'MT5'}
+                </button>
             </div>
 
             {/* Center — Replay + Strategy */}

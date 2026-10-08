@@ -20,7 +20,10 @@ const TV_INTERVAL_MAP: Record<string, string> = {
     '1m': '1',
     '5m': '5',
     '15m': '15',
+    '30m': '30',
     '1h': '60',
+    '4h': '240',
+    '1d': 'D',
 };
 
 interface TradingViewWidgetProps {
@@ -60,7 +63,7 @@ function TradingViewWidgetInner({ symbol, timeframe, chartId = 'main' }: Trading
             autosize: true,
             symbol: tvSymbol,
             interval: tvInterval,
-            timezone: 'Etc/UTC',
+            timezone: 'Asia/Kolkata',
             theme: tvTheme,
             style: '1',           // Candlesticks
             locale: 'en',
@@ -74,6 +77,12 @@ function TradingViewWidgetInner({ symbol, timeframe, chartId = 'main' }: Trading
             save_image: true,
             details: true,
             hotlist: false,
+            hide_volume: false,
+            show_popup_button: true,
+            popup_height: '650',
+            popup_width: '1000',
+            backgroundColor: tvTheme === 'dark' ? '#0F0F0F' : '#FFFFFF',
+            gridColor: tvTheme === 'dark' ? 'rgba(242, 242, 242, 0.2)' : 'rgba(0, 0, 0, 0.08)',
             studies: ['STD;Volume'],
         });
         container.appendChild(script);

@@ -33,6 +33,7 @@ function getPriceDecimals(symbol: string): number {
 
 export default function ChartsPage() {
     const [gridMode, setGridMode] = useState<'1x1' | '2x2'>('1x1');
+    const [chartProvider, setChartProvider] = useState<'native' | 'tradingview'>('native');
     const [rightPanelTab, setRightPanelTab] = useState<string | undefined>(undefined);
     const { activeSymbol, timeframe, replayActive } = useTradingStore();
     const mt5 = useMT5();
@@ -149,7 +150,9 @@ export default function ChartsPage() {
             {/* Top Bar — 48px */}
             <TopBar
                 gridMode={gridMode}
+                chartProvider={chartProvider}
                 onGridModeToggle={() => setGridMode((m) => (m === '1x1' ? '2x2' : '1x1'))}
+                onChartProviderToggle={() => setChartProvider((provider) => provider === 'native' ? 'tradingview' : 'native')}
                 connectionStatus={connectionStatus}
                 latencyMs={latencyMs}
                 onAlertClick={() => setRightPanelTab('alerts')}
@@ -178,6 +181,7 @@ export default function ChartsPage() {
                 <div className="flex-1 min-w-0 relative">
                     <ChartGrid
                         mode={gridMode}
+                        chartProvider={chartProvider}
                         onChartReady={handleChartReady}
                         onChartClick={handleChartClick}
                         drawingMode={isDrawingMode}

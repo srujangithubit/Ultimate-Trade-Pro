@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CandleChart from './CandleChart';
+import TradingViewWidget from './TradingViewWidget';
 import { useTradingStore } from '@/lib/stores/tradingStore';
 import { useMT5 } from '@/components/mt5/MT5Context';
 import { useLiveCandles } from '@/lib/hooks/useLiveCandles';
@@ -15,6 +16,7 @@ interface ChartConfig {
 
 interface ChartGridProps {
     mode: '1x1' | '2x2';
+    chartProvider: 'native' | 'tradingview';
     /** Ref callback — exposes the main chart's series + container refs for drawing tools */
     onChartReady?: (refs: { chart: any; series: any; container: HTMLDivElement }) => void;
     /** Fires with the clicked price (from subscribeClick) */
@@ -32,7 +34,13 @@ const DEFAULT_CONFIGS: ChartConfig[] = [
 
 const TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
 
-export default function ChartGrid({ mode, onChartReady, onChartClick, drawingMode }: ChartGridProps) {
+export default function ChartGrid({
+    mode,
+    chartProvider,
+    onChartReady,
+    onChartClick,
+    drawingMode,
+}: ChartGridProps) {
     const { activeSymbol, timeframe, replayActive, markers, tradeArrows } = useTradingStore();
     const [gridConfigs, setGridConfigs] = useState<ChartConfig[]>(DEFAULT_CONFIGS);
     const [focusedChart, setFocusedChart] = useState(0);
@@ -54,18 +62,22 @@ export default function ChartGrid({ mode, onChartReady, onChartClick, drawingMod
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
             >
-                <LiveChartCell
-                    symbol={activeSymbol}
-                    timeframe={timeframe}
-                    chartId="main-chart"
-                    height={600}
-                    isFocused
-                    markers={markers}
-                    tradeArrows={tradeArrows}
-                    onChartReady={onChartReady}
-                    onChartClick={onChartClick}
-                    drawingMode={drawingMode}
-                />
+                {chartProvider === 'tradingview' ? (
+                    <TradingViewWidget symbol={activeSymbol} timeframe={timeframe} chartId="main-chart" />
+                ) : (
+                    <LiveChartCell
+                        symbol={activeSymbol}
+                        timeframe={timeframe}
+                        chartId="main-chart"
+                        height={600}
+                        isFocused
+                        markers={markers}
+                        tradeArrows={tradeArrows}
+                        onChartReady={onChartReady}
+                        onChartClick={onChartClick}
+                        drawingMode={drawingMode}
+                    />
+                )}
             </motion.div>
         );
     }
@@ -126,13 +138,21 @@ export default function ChartGrid({ mode, onChartReady, onChartClick, drawingMod
                         </div>
 
                         <div className="pt-6 h-full">
-                            <LiveChartCell
-                                symbol={config.symbol}
-                                timeframe={config.timeframe}
-                                chartId={`grid-chart-${index}`}
-                                height={300}
-                                isFocused={focusedChart === index}
-                            />
+                            {chartProvider === 'tradingview' ? (
+                                <TradingViewWidget
+                                    symbol={config.symbol}
+                                    timeframe={config.timeframe}
+                                    chartId={`grid-chart-${index}`}
+                                />
+                            ) : (
+                                <LiveChartCell
+                                    symbol={config.symbol}
+                                    timeframe={config.timeframe}
+                                    chartId={`grid-chart-${index}`}
+                                    height={300}
+                                    isFocused={focusedChart === index}
+                                />
+                            )}
                         </div>
                     </motion.div>
                 ))}
