@@ -1,12 +1,129 @@
 # Ultimate Trade Pro
 
-Ultimate Trade Pro is a full-stack trading workspace for trade journaling,
-performance analytics, strategy/backtesting workflows, community features, and
-optional live MetaTrader 5 synchronization.
+Ultimate Trade Pro is a full-stack trading workspace with trade journaling,
+performance analytics, backtesting, community features, AI-report integrations,
+and optional live MetaTrader 5 synchronization.
 
-> This repository contains the application source and deployment templates.
-> Broker credentials, API keys, local uploads, dependencies, and build output
-> are intentionally excluded.
+The repository contains the active local application plus deployment and
+observability templates. Credentials, dependency directories, build output,
+local uploads, and runtime logs are intentionally excluded.
+
+## Quick start: core application
+
+The core application needs PostgreSQL, Redis, the NestJS API, and the Next.js
+frontend. MT5 is optional.
+
+### Prerequisites
+
+- Windows 10/11, Git, Node.js 20+, npm, and Docker Desktop with Compose.
+- Python 3.10+ only if the MT5 bridge is needed.
+- A MetaTrader 5 terminal and broker account only for live MT5 features.
+
+### Fresh Windows setup
+
+From PowerShell:
+
+```powershell
+git clone https://github.com/srujangithubit/Ultimate-Trade-Pro.git
+Set-Location Ultimate-Trade-Pro
+
+Copy-Item .env.example .env
+Copy-Item backend\.env.example backend\.env
+Copy-Item trading-platform-frontend\.env.example trading-platform-frontend\.env.local
+```
+
+Replace the placeholder JWT and internal-service values in `backend\.env` and
+`.env`. Keep these files local.
+
+Install the active application dependencies:
+
+```powershell
+Set-Location backend
+npm ci
+npx prisma generate
+
+Set-Location ..\trading-platform-frontend
+npm ci
+```
+
+Start PostgreSQL and Redis from the repository root. Compose reads the root
+`.env`; the required JWT variables must therefore be present before this
+command:
+
+```powershell
+Set-Location ..
+$env:JWT_SECRET = "replace-this-local-secret"
+$env:JWT_REFRESH_SECRET = "replace-this-local-refresh-secret"
+$env:MT5_INTERNAL_API_KEY = "replace-this-local-mt5-key"
+docker compose up -d postgres redis
+docker compose ps
+```
+
+The project does not currently contain Prisma Migrate directories. For a
+disposable fresh development database, synchronize the Prisma schema with:
+
+```powershell
+Set-Location backend
+npx prisma db push
+```
+
+`db push` is for development and can change database structure without
+creating a migration history. Do not use it as a production deployment process.
+The checked-in SQL files under `database/schema/` and
+`backend/prisma/migrations/` are supplemental/manual SQL, not Prisma Migrate
+history.
+
+Start the API in one terminal:
+
+```powershell
+Set-Location backend
+npm run start:dev
+```
+
+Start the frontend in another:
+
+```powershell
+Set-Location trading-platform-frontend
+npm run dev
+```
+
+Open <http://localhost:3002>.
+
+## Full setup, including MT5
+
+Copy the MT5 template:
+
+```powershell
+Copy-Item mt5-server\.env.example mt5-server\.env
+Set-Location mt5-server
+npm ci
+Set-Location ..
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r mt5-server\python-bridge\requirements.txt
+```
+
+Set `MT5_INTERNAL_API_KEY` to the same value used by the backend. Set
+`MASTER_MT5_LOGIN`, `MASTER_MT5_PASSWORD`, and `MASTER_MT5_SERVER` only in the
+local `mt5-server\.env` when automatic master-account authentication is needed.
+
+Keep MetaTrader 5 open and logged into the intended broker account. Start the
+Python bridge first:
+
+```powershell
+Set-Location mt5-server\python-bridge
+..\..\.venv\Scripts\python.exe websocket_server.py
+```
+
+Then start the Node bridge in a separate terminal:
+
+```powershell
+Set-Location mt5-server
+npm start
+```
+
+The MT5 bridge can be reachable while reporting
+`mt5Authenticated: false`; that means the process is running but the terminal
+or account authentication failed.
 
 ## Architecture
 
@@ -18,139 +135,94 @@ Browser
           +--> NestJS REST/WebSocket API (:3000)
           |       +--> PostgreSQL 16 / Prisma
           |       +--> Redis 7
-          |       +--> analytics, journal, backtesting, community, AI reports
+          |       +--> auth, journal, analytics, backtesting, community
           |
           +--> MT5 Node bridge (:3001)
                     |
                     +--> Python WebSocket bridge (:8765)
                               |
-                              +--> MetaTrader 5 terminal (Windows)
+                              +--> MetaTrader 5 terminal -> broker
 ```
 
-## Main components
+## Services and ports
 
-- `backend/`: primary NestJS API, Prisma schema/migrations, authentication,
-  journaling, analytics, backtesting, community, and trade-sync modules.
-- `trading-platform-frontend/`: Next.js 16 frontend using React, TypeScript,
-  Tailwind CSS, Zustand, React Query, Recharts, Lightweight Charts, and
-  Three.js.
-- `mt5-server/`: Express/WebSocket bridge that forwards browser requests to the
-  Python MT5 integration.
-- `mt5-server/python-bridge/`: Python `websockets` service using the
-  `MetaTrader5` package.
-- `docker-compose.yml`: local PostgreSQL, Redis, API, and observability stack.
-- `infrastructure/`: Kubernetes, Helm, monitoring, and disaster-recovery
-  configuration.
-- `docs/api/openapi.yaml`: API description maintained in the repository.
+| Service | Port | Purpose |
+|---|---:|---|
+| Next.js frontend | 3002 | Browser application |
+| NestJS API | 3000 | REST, Socket.IO, Swagger, metrics |
+| MT5 Node bridge | 3001 | MT5 REST and browser WebSocket bridge |
+| Python MT5 bridge | 8765 | WebSocket service for MetaTrader 5 |
+| PostgreSQL 16 | 5433 | Local database published by Compose |
+| Redis 7 | 6379 | Cache and distributed state |
+| Grafana (optional) | 3003 | Observability dashboard |
+| Prometheus (optional) | 9090 | Metrics collection |
+| Loki (optional) | 3100 | Log storage |
+| Tempo (optional) | 3200/4318 | Trace storage/OTLP |
 
-`trading-platform-backend/` is an additional NestJS application tree retained
-from the local project. The actively used local API is `backend/`.
+## Repository structure
 
-## Requirements
+- `backend/`: active NestJS API and Prisma schema.
+- `trading-platform-frontend/`: active Next.js 16 frontend.
+- `mt5-server/`: active Node and Python MT5 bridges.
+- `database/`: legacy/manual PostgreSQL schema, indexes, and development seed
+  scripts; inspect before applying to an existing database.
+- `infrastructure/`: Docker monitoring, Kubernetes manifests, and Helm chart.
+- `docs/api/openapi.yaml`: checked-in API reference.
+- `trading-platform-backend/`: secondary/legacy NestJS tree retained from the
+  original local project; it is not the active API used by the local startup
+  sequence.
 
-- Git
-- Node.js 20 or newer (the backend Dockerfile uses Node 20)
-- npm
-- Docker Desktop with Compose
-- Python 3.10 or newer for the MT5 bridge
-- A Windows MetaTrader 5 terminal for live MT5 features
+## Environment variables
 
-## Quick start
+Use the three service templates rather than inventing variable names.
 
-### 1. Configure secrets
+| Variable | Service | Required | Purpose |
+|---|---|---:|---|
+| `DATABASE_URL` | backend | Yes | PostgreSQL connection string |
+| `JWT_SECRET` | backend | Yes | Access-token signing secret |
+| `JWT_REFRESH_SECRET` | backend | Yes | Refresh-token signing secret |
+| `MT5_INTERNAL_API_KEY` | backend/MT5 | Yes for MT5 | Service-to-service authentication |
+| `REDIS_HOST`, `REDIS_PORT` | backend | Optional | Redis connection settings |
+| `REDIS_URL` | backend | Optional | Preferred Redis connection URL |
+| `CORS_ORIGIN_ALLOWLIST` | backend | Optional | Comma-separated browser origins |
+| `FMP_API_KEY` | frontend | Optional | Financial Modeling Prep calendar data |
+| `POLYGON_API_KEY` | backend | Optional | Polygon integration |
+| `STRIPE_SECRET_KEY` | backend | Optional | Stripe integration |
+| `STRIPE_WEBHOOK_SECRET` | backend | Optional | Stripe webhook verification |
+| `MASTER_MT5_LOGIN` | MT5 | Optional | Master MT5 account login |
+| `MASTER_MT5_PASSWORD` | MT5 | Optional | Master MT5 account password |
+| `MASTER_MT5_SERVER` | MT5 | Optional | Broker/server name |
 
-Copy the templates and replace placeholders locally:
+The complete variable lists are in `backend/.env.example`,
+`trading-platform-frontend/.env.example`, and `mt5-server/.env.example`.
+
+## Database
+
+Compose runs PostgreSQL 16 as database `trading_platform`, user `postgres`,
+password `postgres`, published as `localhost:5433`. The active Prisma schema is
+`backend/prisma/schema.prisma`.
+
+Useful commands:
 
 ```powershell
-Copy-Item .env.example .env
-Copy-Item backend\.env.example backend\.env
-Copy-Item trading-platform-frontend\.env.example trading-platform-frontend\.env.local
-Copy-Item mt5-server\.env.example mt5-server\.env
-```
-
-Use long random values for `JWT_SECRET`, `JWT_REFRESH_SECRET`, and
-`MT5_INTERNAL_API_KEY`. Never commit any `.env` file.
-
-### 2. Install dependencies
-
-```powershell
+docker compose logs -f postgres
+docker compose exec postgres pg_isready -U postgres -d trading_platform
 Set-Location backend
-npm ci
+npx prisma validate
 npx prisma generate
-
-Set-Location ..\trading-platform-frontend
-npm ci
-
-Set-Location ..\mt5-server
-npm ci
-
-Set-Location python-bridge
-..\..\.venv\Scripts\python.exe -m pip install -r requirements.txt
+npx prisma db push
+npx prisma studio
 ```
 
-If no virtual environment exists, create one with
-`py -m venv .venv` and use `.venv\Scripts\python.exe`.
+`npx prisma migrate deploy` is not currently applicable because this repository
+has no Prisma Migrate directory history. Do not run `prisma migrate reset` on
+any database containing data; it is destructive. The SQL files in
+`database/schema/` and `backend/prisma/migrations/` require deliberate,
+ordered application with `psql` when their changes are needed.
 
-### 3. Start infrastructure
+## Running and testing
 
-From the repository root:
-
-```powershell
-$env:JWT_SECRET="local-development-secret"
-$env:JWT_REFRESH_SECRET="local-development-refresh-secret"
-$env:MT5_INTERNAL_API_KEY="local-development-mt5-key"
-docker compose up -d postgres redis
-docker compose ps
-```
-
-PostgreSQL is published on `localhost:5433`; Redis is published on
-`localhost:6379`.
-
-### 4. Apply the database schema
-
-```powershell
-Set-Location backend
-npx prisma generate
-npx prisma migrate deploy
-```
-
-The repository currently contains SQL migration files under
-`backend/prisma/migrations`. Use `npx prisma db push` only for disposable
-development databases.
-
-### 5. Start the services
-
-Open separate terminals:
-
-```powershell
-# API
-Set-Location backend
-npm run start:prod
-```
-
-```powershell
-# Frontend
-Set-Location trading-platform-frontend
-npx next start --port 3002
-```
-
-```powershell
-# MT5 Node bridge
-Set-Location mt5-server
-npm start
-```
-
-```powershell
-# Python MT5 bridge
-Set-Location mt5-server\python-bridge
-..\..\.venv\Scripts\python.exe websocket_server.py
-```
-
-Open the application at <http://localhost:3002>.
-
-## Development commands
-
-### Backend
+Backend commands are defined in `backend/package.json`:
 
 ```powershell
 Set-Location backend
@@ -159,12 +231,10 @@ npm run build
 npm test
 npm run test:e2e
 npm run lint
+npm run format
 ```
 
-Swagger is served at <http://localhost:3000/api>. Liveness is available at
-`GET /health`; readiness is available at `GET /ready`.
-
-### Frontend
+Frontend commands are defined in `trading-platform-frontend/package.json`:
 
 ```powershell
 Set-Location trading-platform-frontend
@@ -173,119 +243,96 @@ npm run build
 npm run lint
 ```
 
-The development server uses port `3002` as configured in `package.json`.
+For a production-style frontend run `npm run build` first, then
+`npx next start --port 3002`. The backend production command also requires
+`npm run build` first, then `npm run start:prod`.
 
-### MT5 bridge
+The repository has no root orchestration script. Keeping services in separate
+terminals avoids introducing a platform-specific task runner and matches the
+actual package scripts.
 
-```powershell
-Set-Location mt5-server
-npm run dev
-```
+## Health checks and API
 
-The Python bridge listens on `ws://localhost:8765`; the Node bridge listens on
-`http://localhost:3001` and exposes its health endpoint at `/health`.
+- `GET http://localhost:3000/health`: NestJS liveness and memory check.
+- `GET http://localhost:3000/ready`: database, memory, and disk readiness
+  check. Its disk path is currently `/`, so it is intended for Linux/container
+  deployments and may fail on native Windows.
+- `GET http://localhost:3001/health`: MT5 Node process, bridge, and
+  authentication status.
+- `http://localhost:3000/api`: generated Swagger UI.
+- `ws://localhost:3001/ws/mt5`: browser-facing MT5 WebSocket.
 
-## Database and Redis
+`docs/api/openapi.yaml` is a checked-in reference. Swagger generated by the
+running backend is the authoritative local API surface.
 
-The primary Prisma schema is `backend/prisma/schema.prisma`. Important model
-groups include users/sessions, trading accounts, trades, playbooks, backtesting
-sessions, market candles, community content, and MT5 synchronization records.
+## Docker and observability
 
-Useful commands:
-
-```powershell
-docker compose logs -f postgres
-docker compose logs -f redis
-docker compose exec postgres pg_isready -U postgres -d trading_platform
-docker compose exec redis redis-cli ping
-Set-Location backend
-npx prisma migrate status
-npx prisma studio
-```
-
-## MT5 integration
-
-MT5 support is optional for the rest of the application. Install MetaTrader 5
-on Windows, sign in to the intended account, and keep the terminal running.
-The Python bridge uses the official `MetaTrader5` Python package and the Node
-bridge forwards REST/WebSocket traffic to it.
-
-Configure `MASTER_MT5_LOGIN`, `MASTER_MT5_PASSWORD`, and `MASTER_MT5_SERVER`
-only in the local `mt5-server/.env`. Do not put those values in source,
-README files, CI variables committed to Git, or issue reports.
-
-The browser-facing MT5 routes include:
-
-- `GET /health`
-- `POST /api/mt5/connect`
-- `POST /api/mt5/disconnect`
-- `GET /api/mt5/account`
-- `GET /api/mt5/positions`
-- `GET /api/mt5/history?days=30`
-- `GET /api/mt5/status`
-
-The browser WebSocket endpoint is `ws://localhost:3001/ws/mt5`. If MT5
-authentication fails, the bridge can still be running while reporting
-`mt5Authenticated: false`; verify the terminal login, broker server, account
-permissions, and that the terminal is open.
-
-## Docker and deployment
-
-The Compose file includes PostgreSQL, Redis, the API build, and monitoring
-services such as Prometheus, Grafana, Loki, Tempo, and exporters. Start the
-local stack with:
+`docker compose up -d postgres redis` starts the minimum infrastructure.
+`docker compose up -d` also builds/runs the API and starts Prometheus, Grafana,
+Loki, Tempo, Promtail, and exporters. The full Compose stack requires the
+root-level `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `MT5_INTERNAL_API_KEY`
+variables.
 
 ```powershell
-docker compose up -d
 docker compose ps
 docker compose logs -f api
 docker compose down
 ```
 
-The `backend/Dockerfile` builds the NestJS API. Kubernetes manifests are under
-`infrastructure/k8s/`, and the Helm chart is under
-`infrastructure/helm/trading-platform/`. The Kubernetes secret manifest is a
-template only; provide real values through cluster secret management.
+Persistent volumes are used for PostgreSQL, Redis, Prometheus, Grafana, and
+Tempo data. Do not use `docker compose down -v` unless deleting local data is
+intentional.
 
-## Troubleshooting
+## Kubernetes, Helm, and CI/CD
 
-- **Port in use:** `Get-NetTCPConnection -State Listen`; stop the owning
-  process or change the corresponding service port.
-- **PostgreSQL failure:** check `docker compose ps`, inspect
-  `docker compose logs postgres`, and verify `DATABASE_URL` uses port `5433`
-  for the local Compose mapping.
-- **Redis failure:** check `docker compose logs redis` and
-  `docker compose exec redis redis-cli ping`.
-- **Prisma failure:** run `npx prisma generate`, then
-  `npx prisma migrate status`; confirm PostgreSQL is healthy.
-- **Frontend cannot reach API:** verify `NEXT_PUBLIC_API_URL`,
+Kubernetes manifests are in `infrastructure/k8s/`; the Helm chart is in
+`infrastructure/helm/trading-platform/`. They deploy the API only and expect
+an external PostgreSQL/Redis service, an image in the configured registry, an
+Ingress controller, and externally managed secrets. Do not apply
+`infrastructure/k8s/secrets.yaml` unchanged; create a cluster secret with real
+values through the cluster's secret-management process.
+
+`.github/workflows/ci.yml` runs the repository CI checks on pushes and pull
+requests. The deployment and monitoring workflows are manual or operational
+workflows and require a configured registry, cluster, database, and GitHub
+secrets. The checked-in deployment manifests are templates, not a turnkey
+production environment.
+
+## MT5 troubleshooting
+
+- **Port conflict:** `Get-NetTCPConnection -State Listen`; stop the owning
+  process or change the service template.
+- **PostgreSQL/Redis unavailable:** run `docker compose ps`, inspect service
+  logs, and verify `5433`/`6379`.
+- **Prisma error:** run `npx prisma validate`, `npx prisma generate`, then
+  verify `DATABASE_URL`; remember that `migrate deploy` is not configured.
+- **Frontend cannot reach API:** check `NEXT_PUBLIC_API_URL`,
   `NEXT_PUBLIC_WS_URL`, and that port `3000` is listening.
-- **WebSocket failure:** verify both MT5 services, `MT5_PYTHON_WS_URL`, and
-  the shared `MT5_INTERNAL_API_KEY`.
-- **MT5 disconnected:** keep the Windows terminal open and recheck account
-  credentials, broker server, and terminal authorization.
-- **Missing environment variable:** compare local files with the three
-  `.env.example` templates and restart the affected service.
+- **Node bridge cannot reach Python:** start Python first and check
+  `MT5_PYTHON_WS_URL` and port `8765`.
+- **MT5 authorization failure:** keep the terminal open, verify the broker
+  server/login/password, and confirm the terminal is authorized for automated
+  integration.
+- **Missing environment variable:** compare the appropriate `.env` file with
+  its `.env.example` template and restart the affected process.
 
-## Testing and quality
+## Known limitations and security
 
-The backend uses Jest and has targeted unit/e2e tests. The frontend uses
-Next.js ESLint configuration and Playwright dependencies. Run the commands in
-the development sections after installing dependencies. Full MT5 verification
-requires a configured Windows terminal and valid broker account.
+- Live MT5 requires Windows, an installed/running terminal, and valid broker
+  credentials; it cannot be fully verified in CI.
+- AI, payments, and market-data integrations require their optional external
+  credentials.
+- The native Windows readiness check may fail because `/ready` checks the Unix
+  path `/`.
+- Production deployment requires external secret management and database/Redis
+  services.
+- Never commit `.env` files, broker credentials, API keys, private keys, or
+  generated runtime data. Rotate any credential that has appeared in a local
+  log or shell history.
 
-## Security
-
-Secrets are intentionally excluded through `.gitignore`. Templates contain
-placeholders only. Rotate any credential that has ever been stored in a local
-file, shell history, log, screenshot, or chat attachment before using a shared
-or production environment.
-
-## License
+## License and author
 
 This repository does not currently declare an explicit open-source license.
 
-## Author
-
-**Srujan Javaregowda**<br>
+**Srujan Javaregowda**
 <https://github.com/srujangithubit>
